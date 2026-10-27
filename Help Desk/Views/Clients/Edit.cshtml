@@ -1,0 +1,4 @@
+@model Client
+@{ ViewData["Title"] = Model.Id == 0 ? "Add company" : "Edit company"; }
+<div class="page-heading"><div><a asp-action="Index">← Back to companies</a><h1>@ViewData["Title"]</h1></div></div>
+<form asp-action="Save" method="post" class="panel form-panel"><input asp-for="Id" type="hidden" /><div asp-validation-summary="All" class="validation"></div><label asp-for="Name">Company name</label><input asp-for="Name" maxlength="120" /><label asp-for="Email">Contact email</label><input asp-for="Email" type="email" maxlength="160" /><label asp-for="Phone"></label><input asp-for="Phone" maxlength="40" /><div class="form-actions"><button class="button">Save company</button><a asp-action="Index">Cancel</a></div></form>

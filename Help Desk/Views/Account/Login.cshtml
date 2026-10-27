@@ -1,0 +1,7 @@
+@model LoginViewModel
+@{ Layout = "_AuthLayout"; var aits = Model.Area == LoginArea.Aits; ViewData["Title"] = aits ? "AITS sign in" : "Client sign in"; }
+<div class="portal-tabs"><a class="@(aits ? "selected" : "")" asp-action="AitsLogin">AITS login</a><a class="@(!aits ? "selected" : "")" asp-action="Login">Client login</a></div>
+<p class="eyebrow">@(aits ? "AITS TEAM WORKSPACE" : "CLIENT SUPPORT WORKSPACE")</p><h2>@ViewData["Title"]</h2><p class="muted">@(aits ? "One sign-in for AITS administrators and support staff." : "Sign in to raise and track your support requests.")</p>
+<form asp-action="Login" method="post"><input asp-for="Area" type="hidden" /><input asp-for="ReturnUrl" type="hidden" /><div asp-validation-summary="All" class="validation" role="alert"></div><label asp-for="Email">Email address</label><input asp-for="Email" type="email" autocomplete="username" required /><label asp-for="Password"></label><input asp-for="Password" type="password" autocomplete="current-password" required /><button type="submit" class="button auth-submit">Sign in</button></form>
+@if (aits) { <p class="auth-link">New to the AITS team? <a asp-action="AitsSignup">Create an AITS account</a></p> } else { <p class="auth-link">New client user? <a asp-action="Signup">Create a client account</a></p> }
+@if (aits && ViewBag.CanSetup == true) { <p class="setup-link"><a asp-action="Setup">Set up the first AITS admin</a></p> }

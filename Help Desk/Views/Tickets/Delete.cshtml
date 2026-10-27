@@ -1,0 +1,4 @@
+@model Ticket
+@{ ViewData["Title"] = "Confirm deletion"; }
+<div class="page-heading"><div><a asp-action="Index">← Back</a><h1>Confirm deletion</h1></div></div>
+<section class="panel detail-panel"><h2>Delete @Model.Title?</h2><p>Deleting this ticket also removes its comments.</p><form asp-action="Delete" method="post"><input asp-for="Id" type="hidden" /><div class="form-actions"><button type="submit" class="button danger">Delete permanently</button><a asp-action="Index">Cancel</a></div></form></section>

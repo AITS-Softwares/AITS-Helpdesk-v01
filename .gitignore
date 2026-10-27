@@ -1,0 +1,7 @@
+.vs/
+**/bin/
+**/obj/
+**/App_Data/
+*.csproj.user
+
+**/__pycache__/

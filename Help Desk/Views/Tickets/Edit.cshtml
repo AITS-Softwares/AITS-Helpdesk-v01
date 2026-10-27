@@ -1,0 +1,66 @@
+@model Ticket
+@{
+    ViewData["Title"] = Model.Id == 0 ? "New ticket" : "Edit ticket";
+    var users = (List<DeskUser>)ViewBag.Users;
+    var companies = (List<Client>)ViewBag.Clients;
+    var internalUser = User.IsInRole("Admin") || User.IsInRole("AitsUser");
+}
+<div class="page-heading"><div><a asp-action="Index">← Back to tickets</a><h1>@ViewData["Title"]</h1><p class="muted">Give your team the context they need to help.</p></div></div>
+<form asp-action="Save" method="post" class="panel form-panel">
+    <input asp-for="Id" type="hidden" />
+    <div asp-validation-summary="All" class="validation"></div>
+    @if (internalUser)
+    {
+        <label asp-for="ClientId">Company</label>
+        <select asp-for="ClientId" id="ticketClient"><option value="">Select a company</option>@foreach (var company in companies) { <option value="@company.Id">@company.Name</option> }</select>
+    }
+    else
+    {
+        <label for="accountCompany">Company</label>
+        <input id="accountCompany" value="@(companies.Find(c => c.Id == Model.ClientId)?.Name)" readonly aria-describedby="accountCompanyNote" />
+        <small id="accountCompanyNote" class="muted">Automatically linked to your account.</small>
+    }
+    <label asp-for="Title"></label><input asp-for="Title" maxlength="160" placeholder="A short summary of the issue" />
+    <label asp-for="Description"></label><textarea asp-for="Description" rows="7" maxlength="5000" placeholder="What happened? Include any useful details."></textarea>
+    <div class="form-grid">
+        <div>
+            @if (internalUser)
+            {
+                <label asp-for="RequesterId">Requester</label>
+                <select asp-for="RequesterId"><option value="">Select a requester</option>@foreach (var user in users.Where(u => u.UserType == UserType.ClientUser)) { <option value="@user.Id" data-client="@user.ClientId">@user.Name</option> }</select>
+            }
+            else
+            {
+                <label for="accountRequester">Requester</label>
+                <input id="accountRequester" value="@(users.Find(u => u.Id == Model.RequesterId)?.Name)" readonly />
+            }
+        </div>
+        @if (internalUser)
+        {
+            <div><label asp-for="AssigneeId">Assigned to</label><select asp-for="AssigneeId"><option value="">Unassigned</option>@foreach (var user in users.Where(u => u.UserType == UserType.AitsStaff)) { <option value="@user.Id">@user.Name</option> }</select></div>
+            <div><label asp-for="Status"></label><select asp-for="Status" asp-items="Html.GetEnumSelectList<TicketStatus>()"></select></div>
+        }
+        <div><label asp-for="Priority"></label><select asp-for="Priority" asp-items="Html.GetEnumSelectList<TicketPriority>()"></select></div>
+    </div>
+    <div class="form-actions"><button class="button" type="submit">Save ticket</button><a asp-action="Index">Cancel</a></div>
+</form>
+@section Scripts {
+    @if (internalUser)
+    {
+        <script>
+            const company = document.getElementById('ticketClient');
+            const requester = document.getElementById('RequesterId');
+            function filterRequesters() {
+                for (const option of requester.options) {
+                    if (option.value) {
+                        option.hidden = option.dataset.client !== company.value;
+                        option.disabled = option.hidden;
+                    }
+                }
+                if (requester.selectedOptions[0]?.disabled) requester.value = '';
+            }
+            company.addEventListener('change', filterRequesters);
+            filterRequesters();
+        </script>
+    }
+}
