@@ -1,0 +1,11 @@
+@model SetupAdminViewModel
+@{ ViewData["Title"] = "Add administrator"; }
+<div class="page-heading"><div><p class="eyebrow">SIGN-IN ACCOUNTS</p><h1>Add administrator</h1><p class="muted">Create an internal admin account. The user can sign in through AITS sign in.</p></div></div>
+<form asp-action="CreateAdmin" method="post" class="panel form-panel">
+    <div asp-validation-summary="All" class="validation" role="alert"></div>
+    <label asp-for="Name">Admin name</label><input asp-for="Name" maxlength="80" required autocomplete="name" />
+    <label asp-for="Email"></label><input asp-for="Email" type="email" maxlength="160" required autocomplete="username" />
+    <label asp-for="Password"></label><input asp-for="Password" type="password" minlength="8" maxlength="128" required autocomplete="new-password" /><small>Use at least 8 characters.</small>
+    <label asp-for="ConfirmPassword">Confirm password</label><input asp-for="ConfirmPassword" type="password" minlength="8" maxlength="128" required autocomplete="new-password" />
+    <div class="form-actions"><button class="button" type="submit">Create administrator</button><a asp-action="Index">Cancel</a></div>
+</form>

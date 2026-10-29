@@ -153,6 +153,27 @@ public class AccountController(HelpDeskDbContext db, IPasswordHasher<DeskAccount
         TempData["Message"] = "Admin account created. Use AITS sign in to continue.";
         return RedirectToAction(nameof(AitsLogin));
     }
+    [Authorize(Roles = "Admin"), HttpGet]
+    public IActionResult CreateAdmin() => View(new SetupAdminViewModel());
+
+    [Authorize(Roles = "Admin"), HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateAdmin(SetupAdminViewModel model)
+    {
+        model.Name = model.Name?.Trim() ?? "";
+        model.Email = model.Email?.Trim() ?? "";
+        if (await db.Accounts.AnyAsync(a => a.Email == model.Email) || await db.Users.AnyAsync(u => u.Email == model.Email))
+            ModelState.AddModelError("Email", "This email is already registered or has a directory record.");
+        if (!ModelState.IsValid) return View(model);
+
+        var account = new InternalAccount { Name = model.Name, Email = model.Email, Role = AccountRole.Admin };
+        account.PasswordHash = hasher.HashPassword(account, model.Password);
+        db.Accounts.Add(account);
+        try { await db.SaveChangesAsync(); }
+        catch (DbUpdateException) { ModelState.AddModelError("", "Unable to create the administrator. The email may already be registered."); return View(model); }
+        TempData["Message"] = "Administrator account created. They can sign in at AITS sign in.";
+        return RedirectToAction(nameof(Index));
+    }
+
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Index(bool clients = false, int? clientId = null)
     {
