@@ -2,6 +2,26 @@
 @{ Layout = "_AuthLayout"; var aits = Model.Area == LoginArea.Aits; ViewData["Title"] = aits ? "AITS sign in" : "Client sign in"; }
 <div class="portal-tabs"><a class="@(aits ? "selected" : "")" asp-action="AitsLogin">AITS login</a><a class="@(!aits ? "selected" : "")" asp-action="Login">Client login</a></div>
 <p class="eyebrow">@(aits ? "AITS TEAM WORKSPACE" : "CLIENT SUPPORT WORKSPACE")</p><h2>@ViewData["Title"]</h2><p class="muted">@(aits ? "One sign-in for AITS administrators and support staff." : "Sign in to raise and track your support requests.")</p>
-<form asp-action="Login" method="post"><input asp-for="Area" type="hidden" /><input asp-for="ReturnUrl" type="hidden" /><div asp-validation-summary="All" class="validation" role="alert"></div><label asp-for="Email">Email address</label><input asp-for="Email" type="email" autocomplete="username" required /><label asp-for="Password"></label><input asp-for="Password" type="password" autocomplete="current-password" required /><button type="submit" class="button auth-submit">Sign in</button></form>
+<form asp-action="Login" method="post"><input asp-for="Area" type="hidden" /><input asp-for="ReturnUrl" type="hidden" /><div asp-validation-summary="All" class="validation" role="alert"></div><label asp-for="Email">Email address</label><input asp-for="Email" type="email" autocomplete="username" required /><div class="password-label-row"><label asp-for="Password"></label><a asp-action="ForgotPassword" asp-route-loginArea="@Model.Area">Forgot password?</a></div><div class="password-field"><input asp-for="Password" type="password" autocomplete="current-password" required /><button id="passwordToggle" class="password-toggle" type="button" aria-controls="Password" aria-label="Show password" aria-pressed="false" title="Show password" hidden><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden><path d="m3 3 18 18M10.6 5.1 12 5c6.5 0 10 7 10 7a20 20 0 0 1-3.1 4.1M6.2 6.2A23 23 0 0 0 2 12s3.5 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg></button></div><button type="submit" class="button auth-submit">Sign in</button></form>
 @if (aits) { <p class="auth-link">New to the AITS team? <a asp-action="AitsSignup">Create an AITS account</a></p> } else { <p class="auth-link">New client user? <a asp-action="Signup">Create a client account</a></p> }
 @if (aits && ViewBag.CanSetup == true) { <p class="setup-link"><a asp-action="Setup">Set up the first AITS admin</a></p> }
+
+@section Scripts {
+<script>
+    const passwordInput = document.getElementById('Password');
+    const passwordToggle = document.getElementById('passwordToggle');
+    function setPasswordVisible(visible) {
+        passwordInput.type = visible ? 'text' : 'password';
+        const label = visible ? 'Hide password' : 'Show password';
+        passwordToggle.setAttribute('aria-label', label);
+        passwordToggle.setAttribute('aria-pressed', String(visible));
+        passwordToggle.title = label;
+        passwordToggle.querySelector('.eye-open').toggleAttribute('hidden', visible);
+        passwordToggle.querySelector('.eye-closed').toggleAttribute('hidden', !visible);
+    }
+    passwordToggle.hidden = false;
+    passwordToggle.addEventListener('click', () => setPasswordVisible(passwordInput.type === 'password'));
+    passwordInput.form.addEventListener('submit', () => setPasswordVisible(false));
+    window.addEventListener('pagehide', () => setPasswordVisible(false));
+</script>
+}

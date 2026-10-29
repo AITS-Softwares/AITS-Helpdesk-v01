@@ -1,0 +1,36 @@
+@model StaffProjectsViewModel
+@{ ViewData["Title"] = "Assign projects"; }
+<div class="page-heading"><div><a asp-action="AitsStaff">Back to AITS staff</a><h1>Assign projects</h1><p class="muted">@Model.Staff.Name · @Model.Staff.Email</p></div></div>
+<form asp-action="Projects" asp-route-id="@Model.Staff.Id" method="post" class="panel form-panel assignment-panel">
+    <div asp-validation-summary="All" class="validation"></div>
+    <p>Select the company projects this staff member works on. They will see all tickets in the selected projects, including tickets assigned to other staff.</p>
+    <p class="muted">No projects selected means no ticket access. Only Admin can change these assignments.</p>
+    @foreach (var company in Model.Projects.GroupBy(p => new { p.ClientId, Name = p.Client!.Name })) {
+        <fieldset class="project-group"><legend>@company.Key.Name</legend><label class="company-project-toggle"><input type="checkbox" class="select-company-projects" /> Select all projects in this company</label>
+        @foreach (var project in company) {
+            <label for="project-@project.Id" class="project-choice">
+                <input id="project-@project.Id" type="checkbox" name="SelectedProjectIds" value="@project.Id" checked="@Model.SelectedProjectIds.Contains(project.Id)" class="project-checkbox" /> @project.Name
+            </label>
+        }
+        </fieldset>
+    }
+    @if (!Model.Projects.Any()) { <p class="muted">No projects available. Add projects under Companies first.</p> }
+    <div class="form-actions"><button class="button" type="submit">Save assignments</button><a asp-action="AitsStaff">Back to AITS staff</a></div>
+</form>
+
+@section Scripts {
+<script>
+    document.querySelectorAll('.project-group').forEach(group => {
+        const all = group.querySelector('.select-company-projects');
+        const projects = [...group.querySelectorAll('.project-checkbox')];
+        function refresh() {
+            const selected = projects.filter(project => project.checked).length;
+            all.checked = selected === projects.length;
+            all.indeterminate = selected > 0 && selected < projects.length;
+        }
+        all.addEventListener('change', () => { projects.forEach(project => project.checked = all.checked); refresh(); });
+        projects.forEach(project => project.addEventListener('change', refresh));
+        refresh();
+    });
+</script>
+}

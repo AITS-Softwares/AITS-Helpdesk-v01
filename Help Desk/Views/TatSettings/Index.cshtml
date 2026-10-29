@@ -1,0 +1,15 @@
+@model TatPolicy
+@{ ViewData["Title"] = "TAT settings"; }
+<div class="page-heading"><div><p class="eyebrow">ADMINISTRATION / SERVICE TARGETS</p><h1>Priority TAT settings</h1><p class="muted">Set how much time your support team has to resolve each ticket priority.</p></div><span class="badge">Administrator settings</span></div>
+<form asp-action="Index" method="post" class="panel tat-settings">
+    <div class="panel-heading"><div><h2>Resolution targets</h2><p>Choose a target in calendar hours for each priority.</p></div><span class="tat-settings-clock" aria-hidden="true">◷</span></div>
+    <div asp-validation-summary="All" class="validation" role="alert"></div>
+    <div class="tat-policy-grid">
+        <section class="tat-policy-card low"><span class="priority Low">● Low</span><h2>Low priority</h2><p>Routine requests and minor issues.</p><label asp-for="LowHours">Resolution time</label><div class="tat-hours-input"><input asp-for="LowHours" type="number" min="1" max="8760" step="1" required /><span>hours</span></div><span asp-validation-for="LowHours" class="validation"></span></section>
+        <section class="tat-policy-card medium"><span class="priority Medium">● Medium</span><h2>Medium priority</h2><p>Issues that affect everyday work.</p><label asp-for="MediumHours">Resolution time</label><div class="tat-hours-input"><input asp-for="MediumHours" type="number" min="1" max="8760" step="1" required /><span>hours</span></div><span asp-validation-for="MediumHours" class="validation"></span></section>
+        <section class="tat-policy-card high"><span class="priority High">● High</span><h2>High priority</h2><p>Significant disruption needing attention.</p><label asp-for="HighHours">Resolution time</label><div class="tat-hours-input"><input asp-for="HighHours" type="number" min="1" max="8760" step="1" required /><span>hours</span></div><span asp-validation-for="HighHours" class="validation"></span></section>
+        <section class="tat-policy-card urgent"><span class="priority Urgent">● Urgent</span><h2>Urgent priority</h2><p>Critical issues requiring a fast response.</p><label asp-for="UrgentHours">Resolution time</label><div class="tat-hours-input"><input asp-for="UrgentHours" type="number" min="1" max="8760" step="1" required /><span>hours</span></div><span asp-validation-for="UrgentHours" class="validation"></span></section>
+    </div>
+    <div class="tat-policy-note"><strong>How these targets work</strong><p>The clock starts when a ticket is created and includes nights and weekends. Changes apply to new tickets and when an existing ticket's priority changes without a custom TAT. Existing deadlines stay in place when these settings are saved.</p><p>You can override the target for an individual ticket from its edit page. Assigned staff receive app and email alerts if an unresolved ticket misses its deadline, using your email settings.</p></div>
+    <div class="tat-policy-save"><small class="muted">Allowed range: 1–8,760 hours per priority.</small><button class="button" type="submit">Save TAT settings</button></div>
+</form>

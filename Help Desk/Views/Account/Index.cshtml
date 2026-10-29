@@ -1,4 +1,38 @@
 @model List<DeskAccount>
-@{ ViewData["Title"] = "Sign-in accounts"; }
-<div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1>Sign-in accounts</h1><p class="muted">Admin, AITS staff, and client access are separate.</p></div><a class="button" asp-action="Create">+ Enable user sign-in</a></div>
-<section class="panel"><div class="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created (UTC)</th><th>Action</th></tr></thead><tbody>@foreach(var account in Model) { <tr><td>@account.Name</td><td>@account.Email</td><td><span class="badge">@account.Role</span></td><td>@(account.IsApproved ? "Approved" : "Pending approval")</td><td>@account.CreatedAt.ToString("dd MMM yyyy, HH:mm")</td><td>@if (!account.IsApproved && account.Role == AccountRole.AitsUser) { <form asp-action="Approve" method="post"><input type="hidden" name="id" value="@account.Id" /><button type="submit" class="button">Approve staff</button></form> }</td></tr> }</tbody></table></div></section>
+@{ var directory = (List<DeskUser>)ViewBag.DirectoryUsers; var projects = (Dictionary<int,List<string>>)ViewBag.StaffProjects; var rows = directory.Select(u => new AccountDirectoryRow { User = u, Account = Model.FirstOrDefault(a => a.DeskUserId == u.Id) }).Concat(Model.Where(a => a.DeskUserId == null).Select(a => new AccountDirectoryRow { Account = a })).OrderBy(r => r.Name).ToList(); var clients = (bool)ViewBag.ClientAccounts; ViewData["Title"] = clients ? "Client sign-in accounts" : "Admin / AITS sign-in accounts"; }
+<div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1>@ViewData["Title"]</h1><p class="muted">Admin, AITS staff, and client access are separate.</p></div><a class="button button-secondary" asp-controller="Users" asp-action="Create" asp-route-staff="false" asp-route-clientId="@ViewBag.ClientId">+ Add client user</a><a class="button" asp-controller="Users" asp-action="Create" asp-route-staff="true">+ Add AITS staff</a></div>
+@if (User.IsInRole("Admin")) {
+    var requests = (List<PasswordResetRequestItem>)ViewBag.PasswordResetRequests;
+    <section class="panel reset-requests-panel"><div class="panel-heading"><div><h2>Password reset requests <span class="count">@requests.Count</span></h2><p class="muted">Verify the user before resetting their password. No reset emails are sent.</p></div></div>
+    @if (requests.Any()) {
+        <div class="table-scroll"><table><thead><tr><th>Email</th><th>Requested (UTC)</th><th>Action</th></tr></thead><tbody>
+        @foreach (var request in requests) { <tr><td>@request.Email</td><td>@request.RequestedAt.ToString("dd MMM yyyy, HH:mm")</td><td><div class="row-actions">@if (request.AccountId.HasValue) { <a class="button" asp-action="ResetPassword" asp-route-id="@request.AccountId">Reset password</a> } else { <span class="muted">Account no longer available</span> }<form asp-action="DismissResetRequest" method="post"><input type="hidden" name="id" value="@request.RequestId" /><button type="submit" class="text-button">Dismiss</button></form></div></td></tr> }
+        </tbody></table></div>
+    } else { <div class="empty">No pending password reset requests.</div> }
+    </section>
+}
+<section class="panel"><nav class="directory-tabs" aria-label="Sign-in account groups"><a asp-action="Index" class="@(!clients ? "button" : "")">Admin / AITS accounts</a><a asp-action="Index" asp-route-clients="true" class="@(clients ? "button" : "")">Client accounts</a></nav>
+@if (clients) { <form method="get" class="filters"><input type="hidden" name="clients" value="true" /><select name="clientId" aria-label="Company"><option value="">All companies</option>@foreach (var company in (List<Client>)ViewBag.Companies) { <option value="@company.Id" selected="@(ViewBag.ClientId == company.Id)">@company.Name</option> }</select><button type="submit" class="button">Filter</button><a asp-action="Index" asp-route-clients="true">Reset</a></form> }
+<div class="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>@(clients ? "Company" : "Projects")</th><th>Role</th><th>Approval</th><th>Access</th><th>Actions</th></tr></thead><tbody>
+@foreach (var row in rows) {
+    var account = row.Account;
+    var user = row.User;
+    var active = account is not null && account.IsActive && user is not AitsStaffUser { IsActive: false };
+    <tr><td><strong>@row.Name</strong></td><td>@(user?.Email ?? account?.Email)</td><td>@(user?.Department ?? "—")</td><td>
+    @if (clients) { @user?.Client?.Name }
+    else if (user is not null && projects.TryGetValue(user.Id, out var assignments)) { @foreach (var project in assignments) { <div class="project-summary">@project</div> } }
+    else { <span class="muted">@(user is null ? "Administrator" : "No projects assigned")</span> }
+    </td><td><span class="badge">@(account?.Role.ToString() ?? (clients ? "ClientUser" : "AitsUser"))</span></td><td>@(account is null ? "—" : account.IsApproved ? "Approved" : "Pending approval")</td><td><span class="badge @(active ? "status-active" : "status-inactive")">@(account is null ? "Sign-in not enabled" : active ? "Active" : "Inactive")</span></td><td><div class="row-actions">
+    @if (user is not null) {
+        <a asp-controller="Users" asp-action="Edit" asp-route-id="@user.Id">Edit</a><a class="text-danger" asp-controller="Users" asp-action="Delete" asp-route-id="@user.Id">Delete</a>
+        @if (user is AitsStaffUser) { <a asp-controller="Users" asp-action="Projects" asp-route-id="@user.Id">Assign projects</a> }
+    }
+    @if (account is null && user is not null) { <a asp-action="Create" asp-route-userId="@user.Id">Enable sign-in</a> }
+    @if (account is not null) {
+        <a asp-action="ResetPassword" asp-route-id="@account.Id">Reset password</a>
+        @if (account.Role != AccountRole.Admin) { <form asp-action="SetActive" method="post">@if (user is AitsStaffUser) { <input type="hidden" name="staffId" value="@user.Id" /> }<input type="hidden" name="id" value="@account.Id" /><input type="hidden" name="isActive" value="@(active ? "false" : "true")" /><button type="submit" class="text-button @(active ? "text-danger" : "")">@(active ? "Disable sign-in" : "Enable sign-in")</button></form> }
+        @if (!account.IsApproved && account.Role == AccountRole.AitsUser) { <form asp-action="Approve" method="post"><input type="hidden" name="id" value="@account.Id" /><button type="submit" class="button">Approve staff</button></form> }
+    }
+    </div></td></tr>
+}
+</tbody></table></div>@if (!rows.Any()) { <p class="empty">No users found. Add a client user or AITS staff member to get started.</p> }</section>

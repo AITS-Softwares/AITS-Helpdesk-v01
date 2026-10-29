@@ -1,0 +1,6 @@
+@model List<CompanyProject>
+@{ ViewData["Title"] = "My companies and projects"; var companies = (List<Client>)ViewBag.Companies; }
+<div class="page-heading"><div><h1>My companies and projects</h1><p class="muted">Your assigned company projects and the people working with you.</p></div></div>
+<section class="panel detail-panel"><h2>Companies</h2><div class="project-card-grid">@foreach (var company in companies) { <a class="project-card" asp-action="Index" asp-route-companyId="@company.Id"><strong>@company.Name</strong><small>View assigned projects →</small></a> }</div></section>
+@if (ViewBag.CompanyId != null) { <section class="panel detail-panel"><h2>Projects</h2><div class="project-card-grid">@foreach (var project in Model) { <a class="project-card" asp-action="Project" asp-route-id="@project.Id"><span class="muted">@project.Client?.Name</span><strong>@project.Name</strong><small>View project team →</small></a> }</div></section> }
+@if (!companies.Any()) { <p class="empty">No projects assigned. Contact your administrator.</p> }

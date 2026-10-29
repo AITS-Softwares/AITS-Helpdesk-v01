@@ -6,7 +6,7 @@ namespace Help_Desk.Data;
 
 public static class DatabaseInitializer
 {
-    public static async Task InitializeAsync(HelpDeskDbContext db, IWebHostEnvironment environment)
+    public static async Task InitializeAsync(HelpDeskDbContext db, IWebHostEnvironment environment, IConfiguration configuration)
     {
         await db.Database.MigrateAsync();
         if (await db.DatabaseStates.AnyAsync()) return;
@@ -16,26 +16,32 @@ public static class DatabaseInitializer
             var legacyPath = Path.Combine(environment.ContentRootPath, "App_Data", "helpdesk.json");
             DeskData data;
             var sqlitePath = Path.Combine(environment.ContentRootPath, "App_Data", "helpdesk.db");
-            if (File.Exists(sqlitePath))
+            if (configuration.GetValue<bool>("Data:ImportLegacy") && File.Exists(sqlitePath))
             {
                 // Prefer the most recent database over the older JSON backup; never write to it.
                 var sourceConnection = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder {
                     DataSource = sqlitePath, Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly
                 };
-                await using var source = new HelpDeskDbContext(new DbContextOptionsBuilder<HelpDeskDbContext>()
+                await using var source = new LegacyImportDbContext(new DbContextOptionsBuilder<LegacyImportDbContext>()
                     .UseSqlite(sourceConnection.ToString()).Options);
                 data = new DeskData {
                     SchemaVersion = 1,
                     Clients = await source.Companies.AsNoTracking().ToListAsync(),
-                    Users = await source.Users.AsNoTracking().ToListAsync(),
-                    Tickets = await source.Tickets.AsNoTracking().Include(t => t.Comments).ToListAsync()
+                    Users = (await source.Users.AsNoTracking().ToListAsync()).Select(u => u.ToEntity()).ToList(),
+                    // Keep the legacy projection explicit: the read-only SQLite schema has no project fields.
+                    Tickets = await source.Tickets.AsNoTracking().Select(t => new Ticket {
+                        Id = t.Id, ClientId = t.ClientId, Title = t.Title, Description = t.Description,
+                        Status = t.Status, Priority = t.Priority, RequesterId = t.RequesterId,
+                        AssigneeId = t.AssigneeId, CreatedAt = t.CreatedAt, UpdatedAt = t.UpdatedAt,
+                        Comments = t.Comments.ToList()
+                    }).ToListAsync()
                 };
             }
-            else if (File.Exists(legacyPath))
+            else if (configuration.GetValue<bool>("Data:ImportLegacy") && File.Exists(legacyPath))
             {
                 // Never overwrite the original file. Failed imports roll back and can be retried.
-                data = JsonSerializer.Deserialize<DeskData>(await File.ReadAllTextAsync(legacyPath))
-                    ?? throw new InvalidDataException("The existing JSON data could not be imported.");
+                data = (JsonSerializer.Deserialize<LegacyDeskData>(await File.ReadAllTextAsync(legacyPath))
+                    ?? throw new InvalidDataException("The existing JSON data could not be imported.")).ToDeskData();
                 if (data.SchemaVersion < 1)
                 {
                     data.Clients.Add(new Client { Id = 1, Name = "Existing client", Email = "client@example.com" });
@@ -49,13 +55,7 @@ public static class DatabaseInitializer
             }
             else
             {
-                data = new DeskData {
-                    Clients = [new Client { Id = 1, Name = "Example client", Email = "client@example.com" }],
-                    Users = [
-                        new DeskUser { Id = 1, Name = "AITS Support", Email = "support@example.com", Department = "IT Support", UserType = UserType.AitsStaff },
-                        new DeskUser { Id = 2, Name = "Example User", Email = "user@example.com", Department = "Operations", ClientId = 1 }
-                    ]
-                };
+                data = new DeskData();
             }
             var comments = data.Tickets.SelectMany(ticket => {
                 foreach (var comment in ticket.Comments) { comment.Id = 0; comment.TicketId = ticket.Id; comment.Ticket = null; }
@@ -63,7 +63,11 @@ public static class DatabaseInitializer
             }).ToList();
             foreach (var ticket in data.Tickets) ticket.Comments = [];
             await InsertWithIdentityAsync(db, data.Clients, "SET IDENTITY_INSERT [Companies] ON", "SET IDENTITY_INSERT [Companies] OFF");
-            await InsertWithIdentityAsync(db, data.Users, "SET IDENTITY_INSERT [Users] ON", "SET IDENTITY_INSERT [Users] OFF");
+            // Normalize pre-company JSON imports after their legacy user types have been inferred.
+            db.Users.AddRange(data.Users.Select(u => UserEditViewModel.From(u).ToEntity()));
+            await db.SaveChangesAsync();
+            var nextUserId = data.Users.Select(u => u.Id).DefaultIfEmpty(0).Max() + 1;
+            await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @next int = {nextUserId}; DECLARE @sql nvarchar(100) = N'ALTER SEQUENCE [UserIds] RESTART WITH ' + CONVERT(nvarchar(20), @next); EXEC sys.sp_executesql @sql;");
             await InsertWithIdentityAsync(db, data.Tickets, "SET IDENTITY_INSERT [Tickets] ON", "SET IDENTITY_INSERT [Tickets] OFF");
             db.Comments.AddRange(comments);
         }
@@ -84,3 +88,4 @@ public static class DatabaseInitializer
         finally { await db.Database.ExecuteSqlRawAsync(disableSql); }
     }
 }
+

@@ -1,15 +1,17 @@
 @model Ticket
+@inject Help_Desk.Services.TicketTatPolicy TatPolicyProvider
 @{
     ViewData["Title"] = Model.Id == 0 ? "New ticket" : "Edit ticket";
+    var priorityTargets = await TatPolicyProvider.ReadAsync();
     var users = (List<DeskUser>)ViewBag.Users;
     var companies = (List<Client>)ViewBag.Clients;
     var internalUser = User.IsInRole("Admin") || User.IsInRole("AitsUser");
 }
 <div class="page-heading"><div><a asp-action="Index">← Back to tickets</a><h1>@ViewData["Title"]</h1><p class="muted">Give your team the context they need to help.</p></div></div>
-<form asp-action="Save" method="post" class="panel form-panel">
+<form asp-action="Save" method="post" enctype="multipart/form-data" class="panel form-panel">
     <input asp-for="Id" type="hidden" />
     <div asp-validation-summary="All" class="validation"></div>
-    @if (internalUser)
+    @if (internalUser && Model.Id == 0)
     {
         <label asp-for="ClientId">Company</label>
         <select asp-for="ClientId" id="ticketClient"><option value="">Select a company</option>@foreach (var company in companies) { <option value="@company.Id">@company.Name</option> }</select>
@@ -18,10 +20,23 @@
     {
         <label for="accountCompany">Company</label>
         <input id="accountCompany" value="@(companies.Find(c => c.Id == Model.ClientId)?.Name)" readonly aria-describedby="accountCompanyNote" />
-        <small id="accountCompanyNote" class="muted">Automatically linked to your account.</small>
+        <small id="accountCompanyNote" class="muted">@(internalUser ? "Company is fixed for this ticket." : "Automatically linked to your account.")</small>
     }
+    <label asp-for="ProjectId">Project</label>
+    <select asp-for="ProjectId" id="ticketProject"><option value="">Select a project</option>@foreach (var project in (List<CompanyProject>)ViewBag.Projects) { <option value="@project.Id" data-client="@project.ClientId">@project.Name</option> }</select>
+    <small id="projectNote" class="muted"></small>
     <label asp-for="Title"></label><input asp-for="Title" maxlength="160" placeholder="A short summary of the issue" />
     <label asp-for="Description"></label><textarea asp-for="Description" rows="7" maxlength="5000" placeholder="What happened? Include any useful details."></textarea>
+    <section class="ticket-photo-upload">
+        <label for="photo">Photo <span class="optional-label">Optional</span></label>
+        <input id="photo" name="photo" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-describedby="photoHelp photoError" />
+        <small id="photoHelp" class="muted">Add a screenshot or photo to explain the issue. PNG, JPG, or WebP, up to 5 MB. You can save without a photo.</small>
+        <span id="photoError" class="validation" role="alert"></span>
+        <div id="newPhotoPreview" class="photo-preview" hidden><img id="photoPreviewImage" alt="Preview of the selected ticket photo" /></div><button id="clearPhoto" type="button" class="text-button clear-photo" hidden>Clear selected photo</button>
+        @if (ViewBag.HasPhoto == true) {
+            <div id="currentPhoto" class="photo-preview"><img src="@Url.Action("Photo", new { id = Model.Id })" alt="Current ticket photo" loading="lazy" /><label class="project-choice"><input type="checkbox" name="removePhoto" value="true" /> Remove current photo</label></div>
+        }
+    </section>
     <div class="form-grid">
         <div>
             @if (internalUser)
@@ -37,20 +52,59 @@
         </div>
         @if (internalUser)
         {
-            <div><label asp-for="AssigneeId">Assigned to</label><select asp-for="AssigneeId"><option value="">Unassigned</option>@foreach (var user in users.Where(u => u.UserType == UserType.AitsStaff)) { <option value="@user.Id">@user.Name</option> }</select></div>
+            @if (User.IsInRole("Admin")) {
+            <div><label asp-for="AssigneeId">Assigned to</label><select asp-for="AssigneeId"><option value="">Unassigned</option>@foreach (var user in users.Where(u => u.UserType == UserType.AitsStaff)) { <option value="@user.Id" disabled="@(user is AitsStaffUser { IsActive: false } && user.Id != Model.AssigneeId)">@user.Name@(user is AitsStaffUser { IsActive: false } ? " (Inactive)" : "")</option> }</select></div>
+            } else { <div><label>Assigned to</label><p>@(users.Find(u => u.Id == Model.AssigneeId)?.Name ?? "Unassigned - use Take ownership on the ticket details page")</p></div> }
             <div><label asp-for="Status"></label><select asp-for="Status" asp-items="Html.GetEnumSelectList<TicketStatus>()"></select></div>
         }
-        <div><label asp-for="Priority"></label><select asp-for="Priority" asp-items="Html.GetEnumSelectList<TicketPriority>()"></select></div>
+        <div><label asp-for="Priority"></label><select asp-for="Priority" class="priority-select" asp-items="Html.GetEnumSelectList<TicketPriority>()"></select></div>
     </div>
+    @if (User.IsInRole("Admin")) {
+        <label for="tatHours">Resolution TAT (calendar hours)</label>
+        <input id="tatHours" name="tatHours" type="number" min="1" max="8760" step="1" value="@(Model.HasCustomTat ? (int?)Math.Ceiling((Help_Desk.Services.TicketTiming.DueAt(Model) - Model.CreatedAt).TotalHours) : null)" placeholder="Use priority default" aria-describedby="tatHoursHelp" />
+        <small id="tatHoursHelp" class="muted">Optional. Set a target for this ticket, measured from its creation time. Leave blank to use priority targets. Clearing an existing custom target resets it to the current priority default.</small>
+    }
+    <p class="muted">Resolution targets: Low @(priorityTargets.LowHours)h · Medium @(priorityTargets.MediumHours)h · High @(priorityTargets.HighHours)h · Urgent @(priorityTargets.UrgentHours)h (calendar hours). All tickets start at L1 and can be escalated through L2 to L3.</p>
     <div class="form-actions"><button class="button" type="submit">Save ticket</button><a asp-action="Index">Cancel</a></div>
 </form>
 @section Scripts {
-    @if (internalUser)
-    {
         <script>
-            const company = document.getElementById('ticketClient');
+            const priority = document.getElementById('Priority');
+            function updatePriorityColor() { priority.dataset.priority = priority.value; }
+            priority.addEventListener('change', updatePriorityColor);
+            updatePriorityColor();
+            const photoInput = document.getElementById('photo');
+            const preview = document.getElementById('newPhotoPreview');
+            const previewImage = document.getElementById('photoPreviewImage');
+            const currentPhoto = document.getElementById('currentPhoto');
+            let photoUrl;
+            function updatePhotoPreview() {
+                if (photoUrl) { URL.revokeObjectURL(photoUrl); photoUrl = undefined; }
+                preview.hidden = true;
+                if (currentPhoto) currentPhoto.hidden = false;
+                photoInput.setCustomValidity('');
+                document.getElementById('photoError').textContent = '';
+                const file = photoInput.files[0];
+                document.getElementById('clearPhoto').hidden = !file;
+                if (!file) return;
+                if (file.size > 5 * 1024 * 1024) {
+                    const error = 'The photo must be 5 MB or smaller.';
+                    photoInput.setCustomValidity(error);
+                    document.getElementById('photoError').textContent = error;
+                    return;
+                }
+                photoUrl = URL.createObjectURL(file);
+                previewImage.src = photoUrl;
+                preview.hidden = false;
+                if (currentPhoto) currentPhoto.hidden = true;
+            }
+            photoInput.addEventListener('change', updatePhotoPreview);
+            document.getElementById('clearPhoto').addEventListener('click', () => { photoInput.value = ''; updatePhotoPreview(); });
+            window.addEventListener('pagehide', () => { if (photoUrl) URL.revokeObjectURL(photoUrl); });
+            const company = document.getElementById('ticketClient') || { value: '@Model.ClientId', addEventListener: () => {} };
             const requester = document.getElementById('RequesterId');
             function filterRequesters() {
+                if (!requester) return;
                 for (const option of requester.options) {
                     if (option.value) {
                         option.hidden = option.dataset.client !== company.value;
@@ -61,6 +115,24 @@
             }
             company.addEventListener('change', filterRequesters);
             filterRequesters();
+            const project = document.getElementById('ticketProject');
+            function filterProjects() {
+                const available = [];
+                for (const option of project.options) {
+                    if (!option.value) continue;
+                    option.hidden = option.dataset.client !== company.value;
+                    option.disabled = option.hidden;
+                    if (!option.hidden) available.push(option);
+                }
+                if (project.selectedOptions[0]?.disabled) project.value = '';
+                if (available.length === 1) project.value = available[0].value;
+                project.required = available.length > 0;
+                document.getElementById('projectNote').textContent = !company.value ? 'Select a company to see its projects.' : available.length === 0 ? 'No projects configured for this company.' : available.length === 1 ? 'Automatically selected for this company.' : 'Select a project for this company.';
+            }
+            company.addEventListener('change', filterProjects);
+            filterProjects();
         </script>
-    }
 }
+
+
+

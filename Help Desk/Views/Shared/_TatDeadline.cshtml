@@ -1,0 +1,13 @@
+@model Ticket
+@{
+    var now = DateTime.UtcNow;
+    var due = Help_Desk.Services.TicketTiming.DueAt(Model);
+    var complete = Model.Status == TicketStatus.Resolved || Model.Status == TicketStatus.Closed;
+    var late = (Model.ClosedAt ?? now) >= due;
+    var label = complete ? Model.ClosedAt.HasValue ? late ? "Completed late" : "Met TAT" : "Completed" : late ? "Overdue" : "Within TAT";
+}
+<div class="tat-deadline" data-tat-cell data-due="@DateTime.SpecifyKind(due, DateTimeKind.Utc).ToString("O")" data-now="@now.ToString("O")" data-complete="@complete.ToString().ToLowerInvariant()">
+    <span class="badge @(complete ? "status-inactive" : late ? "tat-overdue" : "status-active")" data-tat-label>@label</span>
+    @if (!complete) { <strong data-tat-countdown>@Help_Desk.Services.TicketTiming.Duration(late ? now - due : due - now) @(late ? "overdue" : "left")</strong> }
+    <small>Due @due.ToString("dd MMM, HH:mm") UTC</small>
+</div>

@@ -1,3 +1,39 @@
 @model List<DeskUser>
-@{ ViewData["Title"] = "Users"; }
-<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE DIRECTORY</p><h1>Users <span class="count">@Model.Count</span></h1><p class="muted">The people behind every request and resolution.</p></div><a class="button" asp-action="Create">+ Add user</a></div><section class="panel"><form method="get" class="filters"><select name="clientId" aria-label="Client company"><option value="">All companies and AITS staff</option>@foreach (var client in (List<Client>)ViewBag.Clients) { <option value="@client.Id" selected="@(ViewBag.ClientId == client.Id)">@client.Name</option> }</select><button class="button">Filter</button><a asp-action="Index">Reset</a></form><div class="table-scroll"><table><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Company / type</th><th></th></tr></thead><tbody>@foreach (var user in Model) { <tr><td><strong>@user.Name</strong></td><td>@user.Email</td><td>@user.Department</td><td>@(user.UserType == UserType.AitsStaff ? "AITS staff" : ((List<Client>)ViewBag.Clients).Find(c => c.Id == user.ClientId)?.Name)</td><td><a asp-action="Edit" asp-route-id="@user.Id">Edit →</a> · <a asp-action="Delete" asp-route-id="@user.Id">Delete</a> · <a asp-controller="Account" asp-action="Create" asp-route-userId="@user.Id">Enable sign-in</a></td></tr> }</tbody></table></div>@if (!Model.Any()) { <div class="empty">Add a person to start creating and assigning tickets.</div> }</section>
+@{
+    var staff = (bool)ViewBag.IsStaff;
+    var companies = (List<Client>)ViewBag.Clients;
+    var enabledUserIds = (HashSet<int>)ViewBag.EnabledUserIds;
+    var staffProjects = staff ? (Dictionary<int, List<string>>)ViewBag.StaffProjects : new Dictionary<int, List<string>>();
+    ViewData["Title"] = staff ? "AITS staff" : "Client users";
+}
+<div class="page-heading">
+    <div><p class="eyebrow">YOUR WORKSPACE DIRECTORY</p><h1>@ViewData["Title"] <span class="count">@Model.Count</span></h1>
+    <p class="muted">@(staff ? "Manage internal AITS staff and their project assignments." : "View client users by company.")</p></div>
+    <a class="button" asp-action="Create" asp-route-staff="@staff" asp-route-clientId="@ViewBag.ClientId">@(staff ? "+ Add AITS staff" : "+ Add client user")</a>
+</div>
+<section class="panel">
+    @if (!staff) {
+        <form asp-action="ClientUsers" method="get" class="filters">
+            <select name="clientId" aria-label="Company">
+                <option value="">All companies</option>
+                @foreach (var company in companies) { <option value="@company.Id" selected="@(ViewBag.ClientId == company.Id)">@company.Name</option> }
+            </select>
+            <button class="button" type="submit">Filter</button><a asp-action="ClientUsers">Reset</a>
+        </form>
+    }
+    <div class="table-scroll"><table>
+        <thead><tr><th>Name</th><th>Email</th><th>Department</th>@if (!staff) { <th>Company</th> } else { <th>Projects</th> }<th>Actions</th></tr></thead>
+        <tbody>@foreach (var user in Model) {
+            <tr><td><strong>@user.Name</strong></td><td>@user.Email</td><td>@user.Department</td>
+            @if (!staff) { <td>@companies.Find(c => c.Id == user.ClientId)?.Name</td> }
+            @if (staff) {
+                <td class="project-summary">@if (staffProjects.TryGetValue(user.Id, out var assigned)) { @foreach (var project in assigned) { <div>@project</div> } } else { <span class="muted">No projects assigned</span> }</td>
+            }
+            <td><div class="row-actions">
+                @if (staff && User.IsInRole("Admin")) { <a asp-action="Projects" asp-route-id="@user.Id">Assign projects</a> }
+                <a asp-action="Edit" asp-route-id="@user.Id">Edit</a><a asp-action="Delete" asp-route-id="@user.Id">Delete</a>@if (enabledUserIds.Contains(user.Id)) { <span class="badge status-active">Sign-in enabled</span> } else { <a asp-controller="Account" asp-action="Create" asp-route-userId="@user.Id">Enable sign-in</a> }
+            </div></td></tr>
+        }</tbody>
+    </table></div>
+    @if (!Model.Any()) { <div class="empty">@(staff ? "No AITS staff added yet." : "No client users found for this company.")</div> }
+</section>

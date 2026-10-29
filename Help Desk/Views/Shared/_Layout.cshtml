@@ -1,4 +1,45 @@
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    var action = ViewContext.RouteData.Values["action"]?.ToString();
+    var staffSection = ViewData["StaffSection"] as bool? ?? (action == "AitsStaff" || Context.Request.Query["staff"].ToString().Equals("true", StringComparison.OrdinalIgnoreCase));
+    var internalUser = User.IsInRole("Admin");
+    var displayName = User.Identity?.Name ?? "Your workspace";
+    var initials = string.Concat(displayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => part[0])).ToUpperInvariant();
+    var roleLabel = User.IsInRole("Admin") ? "Administrator" : User.IsInRole("AitsUser") ? "AITS staff" : "Client user";
+}
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>@ViewData["Title"] · AITS Helpdesk</title><link rel="stylesheet" href="~/css/site.css" asp-append-version="true" /></head>
-<body><aside class="sidebar"><a class="brand" asp-controller="Home" asp-action="Index"><span class="brand-icon">a</span> AITS<span class="brand-dot">.</span></a><p class="nav-label">WORKSPACE</p><nav><a asp-controller="Home" asp-action="Index">◈ &nbsp; Overview</a><a asp-controller="Tickets" asp-action="Index">▤ &nbsp; Tickets</a>@if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { <a asp-controller="Clients" asp-action="Index">▦ &nbsp; Companies</a> }@if (User.IsInRole("Admin")) { <a asp-controller="Users" asp-action="Index">◉ &nbsp; Users</a><a asp-controller="Account" asp-action="Index">◇ &nbsp; Sign-in accounts</a> }</nav><div class="sidebar-note"><strong>A little support goes a long way.</strong><p>One workspace for every request.</p></div><div class="workspace"><span>@User.Identity?.Name<br /><small>@User.FindFirst("role")?.Value</small></span></div><form asp-controller="Account" asp-action="Logout" method="post" class="signout-form"><button type="submit">Sign out →</button></form></aside>
-<div class="shell"><header class="topbar"><span>Workspace <span class="muted">/ @ViewData["Title"]</span></span><span class="workspace-badge">● &nbsp; @User.FindFirst("role")?.Value</span></header><main>@if (TempData["Message"] is string message) { <div class="notice" role="status">@message</div> } @if (TempData["Error"] is string error) { <div class="error notice" role="alert">@error</div> } @RenderBody()</main><footer>AITS Helpdesk · Make work flow better <span>All timestamps in UTC</span></footer></div>@await RenderSectionAsync("Scripts", required: false)</body></html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#171e32" /><title>@ViewData["Title"] · AITS Helpdesk</title><link rel="stylesheet" href="~/css/site.css" asp-append-version="true" /><link rel="stylesheet" href="~/css/responsive.css" asp-append-version="true" /></head>
+<body>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<aside class="sidebar"><div class="sidebar-brand">
+    <a class="brand" asp-controller="Home" asp-action="Index"><span class="brand-icon">a</span><span>AITS<span class="brand-dot">.</span><small>SUPPORT WORKSPACE</small></span></a>
+    <button type="button" id="navigation-toggle" class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="workspace-navigation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg> Menu</button></div>
+    <p class="nav-label">WORKSPACE</p>
+    <nav id="workspace-navigation" aria-label="Main navigation">
+        <a class="@(controller == "Home" ? "active" : "")" asp-controller="Home" asp-action="Index"><span class="nav-icon">◈</span> Overview</a>
+        <a class="@(controller == "Tickets" ? "active" : "")" asp-controller="Tickets" asp-action="Index"><span class="nav-icon">▤</span> Tickets</a>
+        @if (User.IsInRole("AitsUser")) { <a class="@(controller == "MyWork" && action != "ClientUsers" ? "active" : "")" asp-controller="MyWork" asp-action="Index"><span class="nav-icon">▦</span> My companies &amp; projects</a><a class="@(controller == "MyWork" && action == "ClientUsers" ? "active" : "")" asp-controller="MyWork" asp-action="ClientUsers"><span class="nav-icon">◉</span> Client users</a> }
+        @if (internalUser) {
+            <a class="@(controller == "Clients" ? "active" : "")" asp-controller="Clients" asp-action="Index"><span class="nav-icon">▦</span> Companies</a>
+            <span class="nav-label nav-section">PEOPLE &amp; ACCESS</span>
+            <a class="@((controller == "Account" || controller == "Users") ? "active" : "")" asp-controller="Account" asp-action="Index"><span class="nav-icon">◇</span> Sign-in accounts</a>
+            <a class="@(controller == "TatSettings" ? "active" : "")" asp-controller="TatSettings" asp-action="Index"><span class="nav-icon">◷</span> TAT settings</a>
+            <a class="@(controller == "EmailSettings" ? "active" : "")" asp-controller="EmailSettings" asp-action="Index"><span class="nav-icon">✉</span> Email settings</a>
+        }
+    </nav>
+    <div class="sidebar-note"><span class="sidebar-note-icon">✦</span><strong>Support, in sync.</strong><p>The right people. The right projects. A clearer way to work.</p></div>
+    <div class="sidebar-footer"><div class="workspace"><span class="avatar">@initials</span><span class="workspace-person">@displayName<small>@roleLabel</small></span></div><form asp-controller="Account" asp-action="Logout" method="post" class="signout-form"><button type="submit">Sign out <span aria-hidden="true">↗</span></button></form></div>
+</aside>
+<div class="shell">
+    <header class="topbar"><div class="breadcrumb"><span class="breadcrumb-icon">▦</span><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>@ViewData["Title"]</strong></div><span class="workspace-badge"><span class="status-dot"></span>@roleLabel</span></header>
+    <main id="main-content">@if (TempData["Message"] is string message) { <div class="notice" role="status"><span aria-hidden="true">✓</span> @message</div> }@if (TempData["Error"] is string error) { <div class="error notice" role="alert">@error</div> }@if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { @await Component.InvokeAsync("TatAlerts") }@RenderBody()</main>
+    <footer><span>AITS Helpdesk <span class="footer-dot">·</span> Connected support, better work.</span><span>All timestamps in UTC</span></footer>
+</div>
+<script src="~/js/responsive.js" asp-append-version="true" defer></script>
+<script src="~/js/tat.js" asp-append-version="true" defer></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+
+

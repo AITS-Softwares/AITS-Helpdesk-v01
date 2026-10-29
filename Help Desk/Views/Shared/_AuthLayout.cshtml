@@ -1,2 +1,16 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>@ViewData["Title"] · AITS</title><link rel="stylesheet" href="~/css/site.css" asp-append-version="true" /></head><body class="auth-body"><div class="auth-wrap"><a class="brand" asp-controller="Account" asp-action="Login"><span class="brand-icon">a</span>AITS<span class="brand-dot">.</span></a><div class="auth-intro"><p class="eyebrow">CLIENT SUPPORT WORKSPACE</p><h1>Good support starts here.</h1><p class="muted">Your people, companies, and requests. Connected.</p></div><main class="auth-card">@if (TempData["Message"] is string message) { <div class="notice" role="status">@message</div> }@RenderBody()</main><p class="auth-footer">AITS Helpdesk · Built around your team</p></div>@await RenderSectionAsync("Scripts", required: false)</body></html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#171e32" /><title>@ViewData["Title"] · AITS</title><link rel="stylesheet" href="~/css/site.css" asp-append-version="true" /><link rel="stylesheet" href="~/css/responsive.css" asp-append-version="true" /></head>
+<body class="auth-body">
+<div class="auth-wrap">
+    <section class="auth-story">
+        <a class="brand" asp-controller="Account" asp-action="Login"><span class="brand-icon">a</span><span>AITS<span class="brand-dot">.</span><small>SUPPORT WORKSPACE</small></span></a>
+        <div class="auth-intro"><p class="eyebrow">EVERY REQUEST. CONNECTED.</p><h1>A little clarity.<br />A lot of progress.</h1><p>Bring your people, projects, and support requests together. Keep work moving with the right team beside you.</p></div>
+        <div class="auth-illustration" aria-hidden="true"><div class="illustration-orbit"></div><div class="illustration-card"><span class="illustration-check">✓</span><span>THE RIGHT TEAM<strong>Connected to your project</strong></span><i>↗</i></div><div class="illustration-note"><span class="status-dot"></span> One workspace. Clear ownership.</div></div>
+        <p class="auth-story-footer">AITS HELPDESK <span>Built around your team.</span></p>
+    </section>
+    <section class="auth-panel"><main class="auth-card">@if (TempData["Message"] is string message) { <div class="notice" role="status">@message</div> }@RenderBody()</main><p class="auth-footer">Your team. Your projects. Your support, connected.</p></section>
+</div>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

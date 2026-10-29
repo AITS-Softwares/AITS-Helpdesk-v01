@@ -90,16 +90,18 @@ def check():
 
         try:
             start()
-            assert rows('SELECT COUNT(*) FROM __EFMigrationsHistory')[0][0] == 3
+            expected_migrations = {p.stem for p in (ROOT / 'Help Desk/Migrations').glob('[0-9]*.cs') if not p.name.endswith('.Designer.cs')}
+            assert {row[0] for row in rows('SELECT MigrationId FROM __EFMigrationsHistory')} == expected_migrations
             if source.exists() and not (content / 'App_Data/helpdesk.db').exists():
                 original = json.loads(source.read_text(encoding='utf-8-sig'))
-                assert rows('SELECT COUNT(*) FROM Users')[0][0] == len(original['Users'])
+                assert rows('SELECT COUNT(*) FROM ClientUsers')[0][0] + rows('SELECT COUNT(*) FROM AitsStaff')[0][0] == len(original['Users'])
                 assert rows('SELECT COUNT(*) FROM Tickets')[0][0] == len(original['Tickets'])
                 assert (content / 'App_Data/helpdesk.json').read_bytes() == source.read_bytes()
             if (content / 'App_Data/helpdesk.db').exists():
                 with closing(sqlite3.connect(content / 'App_Data/helpdesk.db')) as old:
                     for table in ['Companies', 'Users', 'Tickets', 'Comments']:
-                        assert rows('SELECT COUNT(*) FROM ' + table)[0][0] == old.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0]
+                        actual = rows('SELECT (SELECT COUNT(*) FROM ClientUsers) + (SELECT COUNT(*) FROM AitsStaff)')[0][0] if table == 'Users' else rows('SELECT COUNT(*) FROM ' + table)[0][0]
+                        assert actual == old.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0]
             for path in ['/Clients', '/Clients/Create', '/Users', '/Users/Create', '/Tickets', '/Tickets/Create']:
                 assert '<!DOCTYPE html>' in get(path)
             assert 'id="ClientId"' in get('/Users/Create')
@@ -114,7 +116,7 @@ def check():
             assert 'Select a company' in invalid
             for name in ['One', 'Two']:
                 post('/Users/Save', {'Id': 0, 'Name': f'Smoke User {name}', 'Email': f'{name}@smoke.example', 'Department': 'IT', 'UserType': 0, 'ClientId': company_id}, '/Users/Create')
-            users = rows('SELECT Id FROM Users WHERE ClientId=? ORDER BY Id', (company_id,))
+            users = rows('SELECT Id FROM ClientUsers WHERE ClientId=? ORDER BY Id', (company_id,))
             assert len(users) == 2
             user_id = users[0][0]
             assert 'Smoke User One' in get(f'/Clients/Details/{company_id}')
@@ -122,8 +124,28 @@ def check():
             invalid = post('/Users/Save', {'Id': 0, 'Name': 'Duplicate', 'Email': 'ONE@SMOKE.EXAMPLE', 'Department': 'IT', 'UserType': 0, 'ClientId': company_id}, '/Users/Create')
             assert 'already in use' in invalid
             post('/Users/Save', {'Id': user_id, 'Name': 'Smoke User Edited', 'Email': 'One@smoke.example', 'Department': 'Finance', 'UserType': 0, 'ClientId': company_id}, f'/Users/Edit/{user_id}')
-            assert rows('SELECT Department FROM Users WHERE Id=?', (user_id,))[0][0] == 'Finance'
-            staff_id = rows('SELECT TOP(1) Id FROM Users WHERE UserType=1')[0][0]
+            assert rows('SELECT Department FROM ClientUsers WHERE Id=?', (user_id,))[0][0] == 'Finance'
+            staff_id = rows('SELECT TOP(1) Id FROM AitsStaff WHERE UserType=1')[0][0]
+            staff_email = rows('SELECT Email FROM AitsStaff WHERE Id=?', (staff_id,))[0][0]
+            company_users = get('/Users')
+            assert 'One@smoke.example' in company_users and 'Two@smoke.example' in company_users
+            assert staff_email not in company_users
+            assert 'All companies and AITS staff' not in company_users
+            filtered_users = get(f'/Users?clientId={company_id}')
+            assert 'One@smoke.example' in filtered_users and staff_email not in filtered_users
+            staff_users = get('/Users?staff=true')
+            assert staff_email in staff_users
+            assert 'One@smoke.example' not in staff_users and 'Two@smoke.example' not in staff_users
+            assert 'name="clientId"' not in staff_users
+            assert 'One@smoke.example' not in get(f'/Users?staff=true&clientId={company_id}')
+            client_page = get(f'/Users/ClientUsers?clientId={company_id}&staff=true')
+            assert '<h1>Client users ' in client_page and 'One@smoke.example' in client_page
+            assert staff_email not in client_page
+            staff_page = get(f'/Users/AitsStaff?staff=false&clientId={company_id}')
+            assert '<h1>AITS staff ' in staff_page and staff_email in staff_page
+            assert 'One@smoke.example' not in staff_page
+            assert 'href="/Users/ClientUsers"' in client_page and 'href="/Users/AitsStaff"' in client_page
+            assert 'aria-label="User directory sections"' not in client_page
             ticket = {'Id': 0, 'Title': 'Smoke ticket', 'Description': 'EF persistence', 'ClientId': company_id, 'RequesterId': user_id, 'AssigneeId': staff_id, 'Status': 0, 'Priority': 3}
             post('/Tickets/Save', ticket, '/Tickets/Create')
             ticket_id = rows("SELECT Id FROM Tickets WHERE Title='Smoke ticket'")[0][0]
@@ -147,7 +169,7 @@ def check():
             stop()
             start()
             assert 'Persisted comment' in get(f'/Tickets/Details/{ticket_id}')
-            assert rows('SELECT COUNT(*) FROM Users WHERE ClientId=?', (company_id,))[0][0] == 2
+            assert rows('SELECT COUNT(*) FROM ClientUsers WHERE ClientId=?', (company_id,))[0][0] == 2
             post('/Tickets/Delete', {'id': ticket_id}, f'/Tickets/Delete/{ticket_id}')
             assert rows('SELECT COUNT(*) FROM Comments WHERE TicketId=?', (ticket_id,))[0][0] == 0
             for user in users:

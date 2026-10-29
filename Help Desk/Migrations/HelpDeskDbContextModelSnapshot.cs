@@ -22,6 +22,10 @@ namespace Help_Desk.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence("AccountIds");
+
+            modelBuilder.HasSequence("UserIds");
+
             modelBuilder.Entity("Help_Desk.Data.DatabaseState", b =>
                 {
                     b.Property<int>("Id")
@@ -69,13 +73,39 @@ namespace Help_Desk.Migrations
                     b.ToTable("Companies", (string)null);
                 });
 
-            modelBuilder.Entity("Help_Desk.Models.DeskAccount", b =>
+            modelBuilder.Entity("Help_Desk.Models.CompanyProject", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)")
+                        .UseCollation("Latin1_General_100_CI_AS");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Projects");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.DeskAccount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValueSql("NEXT VALUE FOR [AccountIds]");
+
+                    SqlServerPropertyBuilderExtensions.UseSequence(b.Property<int>("Id"), "AccountIds");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -91,6 +121,11 @@ namespace Help_Desk.Migrations
 
                     b.Property<int>("FailedAttempts")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
                     b.Property<bool>("IsApproved")
                         .ValueGeneratedOnAdd()
@@ -124,19 +159,19 @@ namespace Help_Desk.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Accounts", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Account_Role", "(Role = 0 AND DeskUserId IS NULL) OR (Role IN (1, 2) AND DeskUserId IS NOT NULL)");
-                        });
+                    b.ToTable((string)null);
+
+                    b.UseTpcMappingStrategy();
                 });
 
             modelBuilder.Entity("Help_Desk.Models.DeskUser", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("int")
+                        .HasDefaultValueSql("NEXT VALUE FOR [UserIds]");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    SqlServerPropertyBuilderExtensions.UseSequence(b.Property<int>("Id"), "UserIds");
 
                     b.Property<int?>("ClientId")
                         .HasColumnType("int");
@@ -167,9 +202,90 @@ namespace Help_Desk.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users", null, t =>
+                    b.ToTable((string)null);
+
+                    b.UseTpcMappingStrategy();
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.PasswordResetRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CompletedByAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)")
+                        .UseCollation("Latin1_General_100_CI_AS");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompletedByAccountId");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("[CompletedAt] IS NULL");
+
+                    b.ToTable("PasswordResetRequests");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.StaffProject", b =>
+                {
+                    b.Property<int>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SupportLevel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("StaffId", "ProjectId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("StaffProjects", null, t =>
                         {
-                            t.HasCheckConstraint("CK_User_Company", "(UserType = 0 AND ClientId IS NOT NULL) OR (UserType = 1 AND ClientId IS NULL)");
+                            t.HasCheckConstraint("CK_StaffProject_Level", "SupportLevel BETWEEN 1 AND 3");
+                        });
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TatPolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HighHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LowHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MediumHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UrgentHours")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TatPolicies", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760");
                         });
                 });
 
@@ -182,10 +298,14 @@ namespace Help_Desk.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int?>("AssigneeId")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<int>("ClientId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -195,13 +315,30 @@ namespace Help_Desk.Migrations
                         .HasMaxLength(5000)
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("HasCustomTat")
+                        .HasColumnType("bit");
+
                     b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProjectId")
                         .HasColumnType("int");
 
                     b.Property<int>("RequesterId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ResolutionDueAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
                     b.Property<int>("Status")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<int>("SupportLevel")
+                        .IsConcurrencyToken()
                         .HasColumnType("int");
 
                     b.Property<string>("Title")
@@ -212,20 +349,58 @@ namespace Help_Desk.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("WorkStartedAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssigneeId");
 
-                    b.HasIndex("ClientId");
-
                     b.HasIndex("RequesterId");
+
+                    b.HasIndex("ClientId", "ProjectId");
 
                     b.ToTable("Tickets", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Ticket_Level", "SupportLevel BETWEEN 1 AND 3");
+
                             t.HasCheckConstraint("CK_Ticket_Priority", "Priority BETWEEN 0 AND 3");
+
+                            t.HasCheckConstraint("CK_Ticket_Severity", "Severity BETWEEN 0 AND 3");
 
                             t.HasCheckConstraint("CK_Ticket_Status", "Status BETWEEN 0 AND 3");
                         });
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketActivity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActorName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId", "CreatedAt");
+
+                    b.ToTable("TicketActivities");
                 });
 
             modelBuilder.Entity("Help_Desk.Models.TicketComment", b =>
@@ -235,6 +410,14 @@ namespace Help_Desk.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AuthorName")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("AuthorRole")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Body")
                         .IsRequired()
@@ -254,14 +437,212 @@ namespace Help_Desk.Migrations
                     b.ToTable("Comments");
                 });
 
-            modelBuilder.Entity("Help_Desk.Models.DeskAccount", b =>
+            modelBuilder.Entity("Help_Desk.Models.TicketEmailNotification", b =>
                 {
-                    b.HasOne("Help_Desk.Models.DeskUser", "DeskUser")
-                        .WithMany()
-                        .HasForeignKey("DeskUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
 
-                    b.Navigation("DeskUser");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AlertDueAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompanyId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetLevel")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("TicketId", "StaffId", "Kind", "AlertDueAt")
+                        .IsUnique()
+                        .HasFilter("[StaffId] IS NOT NULL");
+
+                    b.ToTable("TicketEmailNotifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketEmail_Status", "Status BETWEEN 0 AND 5");
+                        });
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketEscalation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FromLevel")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ToLevel")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketEscalations");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketPhoto", b =>
+                {
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("TicketId");
+
+                    b.ToTable("TicketPhotos");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.ClientAccount", b =>
+                {
+                    b.HasBaseType("Help_Desk.Models.DeskAccount");
+
+                    b.ToTable("ClientAccounts", null, t =>
+                        {
+                            t.HasTrigger("TR_ClientAccounts_GroupUniqueness");
+
+                            t.HasCheckConstraint("CK_ClientAccount_Role", "Role = 2 AND DeskUserId IS NOT NULL");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.InternalAccount", b =>
+                {
+                    b.HasBaseType("Help_Desk.Models.DeskAccount");
+
+                    b.ToTable("InternalAccounts", null, t =>
+                        {
+                            t.HasTrigger("TR_InternalAccounts_GroupUniqueness");
+
+                            t.HasCheckConstraint("CK_InternalAccount_Role", "(Role = 0 AND DeskUserId IS NULL) OR (Role = 1 AND DeskUserId IS NOT NULL)");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.AitsStaffUser", b =>
+                {
+                    b.HasBaseType("Help_Desk.Models.DeskUser");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.ToTable("AitsStaff", null, t =>
+                        {
+                            t.HasTrigger("TR_AitsStaff_GroupUniqueness");
+
+                            t.HasCheckConstraint("CK_AitsStaff_Type", "UserType = 1 AND ClientId IS NULL");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.ClientDeskUser", b =>
+                {
+                    b.HasBaseType("Help_Desk.Models.DeskUser");
+
+                    b.ToTable("ClientUsers", null, t =>
+                        {
+                            t.HasTrigger("TR_ClientUsers_GroupUniqueness");
+
+                            t.HasCheckConstraint("CK_ClientUser_Company", "UserType = 0 AND ClientId IS NOT NULL");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.CompanyProject", b =>
+                {
+                    b.HasOne("Help_Desk.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Client");
                 });
 
             modelBuilder.Entity("Help_Desk.Models.DeskUser", b =>
@@ -274,9 +655,38 @@ namespace Help_Desk.Migrations
                     b.Navigation("Client");
                 });
 
+            modelBuilder.Entity("Help_Desk.Models.PasswordResetRequest", b =>
+                {
+                    b.HasOne("Help_Desk.Models.InternalAccount", "CompletedBy")
+                        .WithMany()
+                        .HasForeignKey("CompletedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CompletedBy");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.StaffProject", b =>
+                {
+                    b.HasOne("Help_Desk.Models.CompanyProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Help_Desk.Models.AitsStaffUser", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Staff");
+                });
+
             modelBuilder.Entity("Help_Desk.Models.Ticket", b =>
                 {
-                    b.HasOne("Help_Desk.Models.DeskUser", "Assignee")
+                    b.HasOne("Help_Desk.Models.AitsStaffUser", "Assignee")
                         .WithMany()
                         .HasForeignKey("AssigneeId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -287,17 +697,36 @@ namespace Help_Desk.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Help_Desk.Models.DeskUser", "Requester")
+                    b.HasOne("Help_Desk.Models.ClientDeskUser", "Requester")
                         .WithMany()
                         .HasForeignKey("RequesterId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("Help_Desk.Models.CompanyProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ClientId", "ProjectId")
+                        .HasPrincipalKey("ClientId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Assignee");
 
                     b.Navigation("Client");
 
+                    b.Navigation("Project");
+
                     b.Navigation("Requester");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketActivity", b =>
+                {
+                    b.HasOne("Help_Desk.Models.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("Help_Desk.Models.TicketComment", b =>
@@ -309,6 +738,74 @@ namespace Help_Desk.Migrations
                         .IsRequired();
 
                     b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketEmailNotification", b =>
+                {
+                    b.HasOne("Help_Desk.Models.AitsStaffUser", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Help_Desk.Models.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketEscalation", b =>
+                {
+                    b.HasOne("Help_Desk.Models.AitsStaffUser", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Help_Desk.Models.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Staff");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.TicketPhoto", b =>
+                {
+                    b.HasOne("Help_Desk.Models.Ticket", "Ticket")
+                        .WithOne()
+                        .HasForeignKey("Help_Desk.Models.TicketPhoto", "TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.ClientAccount", b =>
+                {
+                    b.HasOne("Help_Desk.Models.ClientDeskUser", "ClientUser")
+                        .WithMany()
+                        .HasForeignKey("DeskUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ClientUser");
+                });
+
+            modelBuilder.Entity("Help_Desk.Models.InternalAccount", b =>
+                {
+                    b.HasOne("Help_Desk.Models.AitsStaffUser", "Staff")
+                        .WithMany()
+                        .HasForeignKey("DeskUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("Help_Desk.Models.Ticket", b =>

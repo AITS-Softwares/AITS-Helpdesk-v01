@@ -21,4 +21,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Remove="App_Data/demo*;App_Data/**/*.bak;App_Data/helpdesk.*;App_Data/*preview*;App_Data/*backup*" />
+    <None Remove="App_Data/demo*;App_Data/**/*.bak;App_Data/helpdesk.*;App_Data/*preview*;App_Data/*backup*" />
+  </ItemGroup>
 </Project>
+

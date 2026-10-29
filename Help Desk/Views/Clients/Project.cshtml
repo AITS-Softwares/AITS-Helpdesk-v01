@@ -1,0 +1,9 @@
+@model ProjectTeamViewModel
+@{ ViewData["Title"] = Model.Project.Name + " team"; }
+<div class="page-heading"><div><a asp-action="Details" asp-route-id="@Model.Project.ClientId">← @Model.Project.Client?.Name</a><h1>@Model.Project.Name</h1><p class="muted">Assign the company project team by support level. A staff member can work on multiple projects, with one level per project.</p></div></div>
+<form asp-action="AssignTeam" method="post" class="panel detail-panel"><input type="hidden" name="id" value="@Model.Project.Id" />
+<div class="form-grid">@foreach (var level in Enum.GetValues<SupportLevel>()) {
+<section><h2>@level team</h2>@foreach (var staff in Model.Staff.Where(s => s.IsActive)) {
+<label class="project-choice"><input type="checkbox" name="@level.ToString().ToLowerInvariant()" value="@staff.Id" checked="@Model.Members.Any(m => m.StaffId == staff.Id && m.SupportLevel == level)" /> @staff.Name <small class="muted">@staff.Email</small></label>
+}</section>
+}</div><button class="button" type="submit">Save project team</button></form>

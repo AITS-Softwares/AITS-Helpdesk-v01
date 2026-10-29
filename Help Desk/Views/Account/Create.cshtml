@@ -1,4 +1,33 @@
 @model ProvisionAccountViewModel
-@{ ViewData["Title"] = "Enable user sign-in"; }
-<div class="page-heading"><div><a asp-action="Index">← Back to accounts</a><h1>Enable user sign-in</h1><p class="muted">Create access for an existing directory user. The sign-in role follows their user type.</p></div></div>
-<form asp-action="Create" method="post" class="panel form-panel"><div asp-validation-summary="All" class="validation" role="alert"></div><label asp-for="DeskUserId">Directory user</label><select asp-for="DeskUserId" required><option value="">Select a user</option>@foreach (var person in Model.Users) { <option value="@person.Id">@person.Name · @person.Email · @(person.UserType == UserType.AitsStaff ? "AITS staff" : "Client user")</option> }</select><p class="muted">Missing someone? <a asp-controller="Users" asp-action="Create">Add a directory user first</a>.</p><label asp-for="Password">Initial password</label><input asp-for="Password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /><label asp-for="ConfirmPassword">Confirm password</label><input asp-for="ConfirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /><div class="form-actions"><button class="button" type="submit">Create sign-in account</button><a asp-action="Index">Cancel</a></div></form>
+@{ var backController = User.IsInRole("Admin") ? "Account" : "MyWork"; var backAction = User.IsInRole("Admin") ? "Index" : "ClientUsers"; ViewData["Title"] = Model.Staff ? "Enable AITS staff sign-in" : "Enable client sign-in"; }
+<div class="page-heading"><div><a asp-controller="@backController" asp-action="@backAction" asp-route-clients="@(!Model.Staff)">← Back to accounts</a><h1>@ViewData["Title"]</h1><p class="muted">@(Model.SelectedUser is null ? "Choose a directory user to enable their sign-in." : "The selected person and account type are fixed to their directory record.")</p></div></div>
+@if (Model.SelectedUser is null) {
+    <form asp-action="Create" method="get" class="panel form-panel">
+        <input name="staff" value="@Model.Staff" type="hidden" />
+        <label for="userId">@(Model.Staff ? "AITS staff member" : "Client user")</label>
+        <select id="userId" name="userId" required><option value="">Select a user</option>@foreach (var person in Model.Users) { <option value="@person.Id">@person.Name · @person.Email</option> }</select>
+        <p class="muted">Account type: <strong>@(Model.Staff ? "AITS staff" : "Client user")</strong></p>
+        @if (Model.Users.Any()) { <div class="form-actions"><button type="submit" class="button">Continue</button></div> }
+        else { <p class="muted">All users in this group already have sign-in accounts.</p> }
+        <p><a asp-controller="@(User.IsInRole("Admin") ? "Users" : "MyWork")" asp-action="@(User.IsInRole("Admin") ? "Create" : "CreateClient")" asp-route-staff="@Model.Staff">@(Model.Staff ? "Add AITS staff" : "Add a client user")</a></p>
+    </form>
+} else {
+    <form asp-action="Create" asp-route-userId="@Model.SelectedUser.Id" method="post" class="panel form-panel">
+        <input asp-for="DeskUserId" type="hidden" />
+        <div asp-validation-summary="All" class="validation" role="alert"></div>
+        <label for="selectedUserName">@(Model.Staff ? "AITS staff member" : "Client user")</label><input id="selectedUserName" value="@Model.SelectedUser.Name" readonly />
+        <label for="selectedUserEmail">Email address</label><input id="selectedUserEmail" value="@Model.SelectedUser.Email" readonly />
+        <label for="fixedAccountType">Account type</label><input id="fixedAccountType" value="@(Model.Staff ? "AITS staff" : "Client user")" readonly aria-describedby="fixedAccountNote" />
+        <small id="fixedAccountNote" class="muted">Automatically determined from this person's saved user group. It cannot be changed here.</small>
+        @if (!Model.Staff) { <label for="selectedUserCompany">Company</label><input id="selectedUserCompany" value="@Model.SelectedUser.Client?.Name" readonly /> }
+        @if (Model.AlreadyEnabled) {
+            <p class="notice" role="status">Sign-in is already enabled for this user or email.</p>
+            <div class="form-actions"><a class="button" asp-controller="@backController" asp-action="@backAction" asp-route-clients="@(!Model.Staff)">View sign-in accounts</a></div>
+        } else {
+            <label asp-for="Password">Initial password</label><input asp-for="Password" type="password" minlength="8" maxlength="128" autocomplete="new-password" required />
+            <small class="muted">Use at least 8 characters.</small>
+            <label asp-for="ConfirmPassword">Confirm password</label><input asp-for="ConfirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required />
+            <div class="form-actions"><button class="button" type="submit">Create sign-in account</button><a asp-controller="@backController" asp-action="@backAction" asp-route-clients="@(!Model.Staff)">Cancel</a></div>
+        }
+    </form>
+}

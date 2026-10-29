@@ -1,4 +1,29 @@
 @model DeskData
-@{ ViewData["Title"] = "Companies"; }
-<div class="page-heading"><div><p class="eyebrow">AITS COMPANY MANAGEMENT</p><h1>Companies <span class="count">@Model.Clients.Count</span></h1><p class="muted">Manage each client's people and support requests.</p></div>@if (User.IsInRole("Admin")) { <a class="button" asp-action="Create">+ Add company</a> }</div>
-<section class="panel"><div class="table-scroll"><table><thead><tr><th>Company</th><th>Contact email</th><th>Users</th><th>Tickets</th><th></th></tr></thead><tbody>@foreach (var client in Model.Clients) { <tr><td><a asp-action="Details" asp-route-id="@client.Id"><strong>@client.Name</strong></a></td><td>@client.Email</td><td>@Model.Users.Count(u => u.ClientId == client.Id)</td><td>@Model.Tickets.Count(t => t.ClientId == client.Id)</td><td>@if (User.IsInRole("Admin")) { <a asp-action="Edit" asp-route-id="@client.Id">Edit →</a><span> · </span><a asp-action="Delete" asp-route-id="@client.Id">Delete</a> }</td></tr> }</tbody></table></div>@if (!Model.Clients.Any()) { <div class="empty">Add your first client company.</div> }</section>
+@{
+    ViewData["Title"] = "Companies";
+    var projects = (List<CompanyProject>)ViewBag.Projects;
+    var canManageProjects = User.IsInRole("Admin") || User.IsInRole("AitsUser");
+}
+<div class="page-heading"><div><p class="eyebrow">AITS COMPANY MANAGEMENT</p><h1>Companies <span class="count">@Model.Clients.Count</span></h1><p class="muted">View companies and their projects. Open a company to manage its projects, people, and tickets.</p></div>@if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { <a class="button" asp-action="Create">+ Add company</a> }</div>
+<section class="panel">
+<div class="table-scroll"><table>
+<thead><tr><th>Company</th><th>Projects</th><th>Contact email</th><th>Users</th><th>Tickets</th><th>Actions</th></tr></thead>
+<tbody>
+@foreach (var client in Model.Clients) {
+    var companyProjects = projects.Where(p => p.ClientId == client.Id).ToList();
+    <tr>
+        <td><a asp-action="Details" asp-route-id="@client.Id"><strong>@client.Name</strong></a></td>
+        <td>
+            @if (companyProjects.Count == 0) { <span class="muted">No projects added</span> }
+            @foreach (var project in companyProjects) { <div>@project.Name</div> }
+        </td>
+        <td>@client.Email</td><td>@Model.Users.Count(u => u.ClientId == client.Id)</td><td>@Model.Tickets.Count(t => t.ClientId == client.Id)</td>
+        <td>
+            @if (canManageProjects) { <a asp-action="Details" asp-route-id="@client.Id" asp-fragment="projects">Add / manage projects</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { <div><a asp-action="Edit" asp-route-id="@client.Id">Edit company</a><span> · </span><a asp-action="Delete" asp-route-id="@client.Id">Delete</a></div> }
+        </td>
+    </tr>
+}
+</tbody></table></div>
+@if (!Model.Clients.Any()) { <div class="empty">Add your first client company.</div> }
+</section>

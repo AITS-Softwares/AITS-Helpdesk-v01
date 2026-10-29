@@ -1,0 +1,6 @@
+@model ProjectTeamViewModel
+@{ ViewData["Title"] = Model.Project.Name; }
+<div class="page-heading"><div><a asp-action="Index" asp-route-companyId="@Model.Project.ClientId">← @Model.Project.Client?.Name</a><h1>@Model.Project.Name</h1></div><a class="button" asp-controller="Tickets" asp-action="Index" asp-route-scope="project:@Model.Project.Id">View project tickets</a></div>
+<section class="panel detail-panel"><h2>Project team</h2><div class="form-grid">@foreach (var level in Enum.GetValues<SupportLevel>()) { <section><h3>@level team</h3>@foreach (var member in Model.Members.Where(m => m.SupportLevel == level)) { <p><strong>@member.Staff?.Name</strong><br /><span class="muted">@member.Staff?.Email</span>@if (member.Staff?.IsActive == false) { <span class="badge">Inactive</span> }</p> }@if (!Model.Members.Any(m => m.SupportLevel == level)) { <p class="muted">No team members assigned.</p> }</section> }</div></section>
+
+<section class="panel detail-panel"><h2>Client users</h2><p class="muted">View client contacts for this project's company.</p><a class="button" asp-action="ClientUsers" asp-route-projectId="@Model.Project.Id">View client users</a></section>
