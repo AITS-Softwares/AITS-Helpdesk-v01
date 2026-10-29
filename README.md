@@ -88,16 +88,9 @@ InitialSqlServer, AddJwtAccounts, AddStaffApproval, AddCompanyProjects, AddStaff
 
 ```powershell
 dotnet build "Help Desk.sln"
-python tests/smoke.py
-python tests/smoke.py --fresh
-python tests/auth_smoke.py
 ```
 
-The Windows Python standard-library smoke test uses PowerShell's built-in SQL client to inspect a uniquely named disposable `AitsHelpDeskSmoke_<random>` SQL Server database. It creates a test-only admin, starts a hidden local app server, and checks migration application, legacy SQLite/JSON import, company/user/ticket CRUD, company dropdown choices, multiple users per company, duplicate validation, requester/assignee relationships, comments, delete restrictions and cascade behavior, anti-forgery protection, and persistence across restarts. `--fresh` verifies initialization without legacy files. The test drops only its own disposable database and does not modify AitsHelpDesk. The Windows account running tests needs database create/drop permission.
-
 The provider setup follows Microsoft's [SQL Server EF Core documentation](https://learn.microsoft.com/en-us/ef/core/providers/sql-server/).
-
-The authentication smoke test additionally checks first-admin setup closure, AITS/client sign-in separation, both signup pages, staff approval, and database-assigned roles, public signup privilege restrictions, password hashing, HttpOnly token cookies, admin-only company creation, staff permissions, ticket owner/company isolation, forced ownership on client writes, invalid/expired JWT rejection, anti-forgery, sign-out revocation, and session revocation after profile changes. All test accounts live only in disposable databases.
 
 Authentication configuration follows Microsoft's [JWT bearer documentation](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-8.0).
 
@@ -115,7 +108,7 @@ Admin and AITS sign-ins are stored in **InternalAccounts**, linked to **AitsStaf
 
 The separate directories are **Company users** and **AITS staff** in the sidebar. **Sign-in accounts** has separate **Admin / AITS accounts** and **Client accounts** pages, and provisioning shows the selected group's directory users. A user's group is fixed at creation; create a new user in the other group rather than changing an existing user's type. Admin still sees all tickets; AITS staff still see only assigned project tickets.
 
-The migration runs on the next app startup. Stop the old app before deploying the updated version. The migration is transactional and includes a data-preserving rollback. Use `python tests/split_migration_smoke.py` after building to verify an upgrade from populated shared tables, exact record preservation, rollback and re-upgrade, existing logins, separate pages, and database constraints. The read-only legacy SQLite importer uses its original schema independently of the current tables.
+The migration runs on the next app startup. Stop the old app before deploying the updated version. The migration is transactional and includes a data-preserving rollback. The read-only legacy SQLite importer uses its original schema independently of the current tables.
 
 ## Staff activity and project workspace
 
@@ -140,7 +133,7 @@ Both login pages include **Forgot password?**. A user enters their sign-in email
 
 Resetting changes the password hash, revokes old sessions, clears login failure/lockout state, and completes pending requests. It does not change roles, approval, activity, company membership, or project assignments. Resetting an inactive staff member's password does not activate them. Only Admin can reset passwords. An Admin who cannot sign in needs another Admin or the system maintainer's help.
 
-The AddTicketPhotosAndPasswordResetRequests migration creates the two new tables on startup. `python tests/ticket_features_smoke.py` verifies optional uploads, image validation and access, replacement/removal/deletion, recovery requests, Admin-only resets, password length, session revocation, and staff activity preservation in a disposable database.
+The AddTicketPhotosAndPasswordResetRequests migration creates the two new tables on startup.
 
 ## Ticket-created email notifications
 
@@ -171,11 +164,11 @@ Email is off in tracked appsettings.json. Per-machine settings belong in the ign
 
 SMTP uses STARTTLS with certificate validation. Store the password using the `--Email:Configure=true` maintenance mode, supplying it on standard input; it is encrypted with ASP.NET Core Data Protection in the ignored App_Data/smtp-password.protected file. Run configuration with the same OS account and content root as the app, and preserve its Data Protection keys. `--Email:CheckCredentials=true` verifies that the current app can read the protected credential without sending a message. A deployment secret can alternatively supply Email__Password. Do not place credentials in tracked configuration or command-line arguments.
 
-The Development-only `Email:Transport=Pickup` option writes test .eml files under that environment's App_Data/email-pickup directory and never contacts SMTP. `python tests/email_smoke.py` uses a disposable SQL Server database and this local transport to test routing, content, privacy checks, retries, and creation-only delivery; it does not send real test emails.
+The Development-only `Email:Transport=Pickup` option writes test .eml files under that environment's App_Data/email-pickup directory and never contacts SMTP.
 
 ### Ticket editing and support levels
 
-Only Admin can edit existing tickets, including requester details and staff assignments. Direct edit requests and non-Admin update submissions are denied. Staff retain project-scoped ownership claiming and comments. L1/L2/L3 teams are now configured per company project, as described below; individual-ticket level assignment controls have been removed. The current owner is shown separately on ticket details. The AddTicketSupportLevels and MoveSupportTeamsToProjects migrations apply on startup. Run python tests/ticket_ownership_smoke.py for concurrent ownership, editing and deletion permissions, level validation and combined-filter checks.
+Only Admin can edit existing tickets, including requester details and staff assignments. Direct edit requests and non-Admin update submissions are denied. Staff retain project-scoped ownership claiming and comments. L1/L2/L3 teams are now configured per company project, as described below; individual-ticket level assignment controls have been removed. The current owner is shown separately on ticket details. The AddTicketSupportLevels and MoveSupportTeamsToProjects migrations apply on startup.
 
 ### Administrator and AITS staff permissions
 
@@ -187,7 +180,7 @@ Admin manages support teams at Companies → company → project. Select multipl
 
 Individual-ticket L1/L2/L3 assignment controls are removed. All new tickets start at L1 regardless of priority, including High and Urgent, and new ticket emails go to active approved L1 staff for the exact company/project. Severity (Low/Medium/High/Critical) is recorded separately and does not affect routing. Staff can see all tickets in assigned projects; only members of the current support level can take ownership. Staff with project access can assign an unowned ticket to a higher level without claiming it first. Once owned, only its current owner can escalate to a higher level with a reason; handover clears ownership, records history and notifies the destination team. Email recipients are rechecked before sending and each staff member receives at most one notification per ticket.
 
-AITS staff use My companies & projects to open assigned companies, projects and L1/L2/L3 teammates. Administration remains Admin-only. Clients see elapsed calendar time since ticket creation, not staff labor hours. Resolved/closed tickets stop at ClosedAt; historical resolved tickets use their last UpdatedAt as the available approximation. Escalation controls/history are internal. The MoveSupportTeamsToProjects migration applies on startup. The isolated ticket_ownership_smoke.py suite checks teams, scope, handovers, urgent L1 routing and client elapsed time using local email pickup only.
+AITS staff use My companies & projects to open assigned companies, projects and L1/L2/L3 teammates. Administration remains Admin-only. Clients see elapsed calendar time since ticket creation, not staff labor hours. Resolved/closed tickets stop at ClosedAt; historical resolved tickets use their last UpdatedAt as the available approximation. Escalation controls/history are internal. The MoveSupportTeamsToProjects migration applies on startup.
 
 AITS staff have a scoped Client users page under MyWork/ClientUsers and a link from each assigned project. They can create client users and enable client sign-in only for companies where they currently have an assigned project. It shows company contacts only where the staff member currently has a project membership, with company filtering and the staff member's assigned project names. Client users have company membership rather than individual project membership. Unassigned-company and unassigned-project direct links are denied. Existing user editing/deletion, staff account provisioning, project assignments, account administration and password resets remain Admin-only. Staff client creation and sign-in provisioning recheck membership on every GET/POST, and cannot be changed into staff/Admin provisioning through submitted fields.
 
@@ -226,10 +219,10 @@ Staff see an overdue alert across signed-in pages for unresolved tickets assigne
 
 When email sending is enabled, the existing background email worker checks overdue tickets even when staff have no page open. One overdue email is queued per ticket, assigned staff member, and deadline. Reassignment or a new deadline can generate a new alert. The worker checks active, approved sign-in, project access, current ownership, deadline and unresolved status before delivery. Existing retries and Admin delivery history apply; stale notifications are skipped. Configure the sender and public site URL under Email settings. SMTP requires the app to remain running. Existing overdue tickets become eligible after startup.
 
-The AddTatOverdueNotifications migration runs on startup. Verify with `dotnet build "Help Desk/Help Desk.csproj" -c TatCheck -p:UseAppHost=false` and `python tests/tat_smoke.py`. The test uses a disposable database and local pickup email; it does not send external test messages.
+The AddTatOverdueNotifications migration runs on startup.
 
 ## Administrator priority TAT settings
 
 Open **TAT settings** in the administrator sidebar (`/TatSettings`). Set Low, Medium, High and Urgent resolution targets in whole calendar hours (1–8,760), then choose **Save TAT settings**. Defaults are initially 72, 24, 8 and 4 hours. Settings are stored in SQL Server and take effect immediately for new tickets. Saving policy settings preserves existing ticket deadlines. Changing a ticket's priority applies the latest priority target unless a ticket-specific override is supplied. A custom TAT field is blank for tickets using standard priority targets; clearing a saved override restores the current priority default. The clock always starts at ticket creation.
 
-The AddPriorityTatSettings migration creates the settings table, preserves legacy deadlines and identifies existing custom targets. Restart the updated application once to apply this migration. Administrator authorization, anti-forgery protection, server validation, database constraints, persistence, all four priority targets, unchanged existing deadlines and custom override/reset behavior are covered by `tests/tat_smoke.py`.
+The AddPriorityTatSettings migration creates the settings table, preserves legacy deadlines and identifies existing custom targets. Restart the updated application once to apply this migration.
