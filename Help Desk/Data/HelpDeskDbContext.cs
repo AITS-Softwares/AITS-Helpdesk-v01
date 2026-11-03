@@ -17,6 +17,7 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
     public DbSet<Client> Companies => Set<Client>();
     public DbSet<DeskUser> Users => Set<DeskUser>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<TicketEscalation> TicketEscalations => Set<TicketEscalation>();
     public DbSet<TicketPhoto> TicketPhotos => Set<TicketPhoto>();
     public DbSet<PasswordResetRequest> PasswordResetRequests => Set<PasswordResetRequest>();
@@ -28,10 +29,10 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
     protected override void OnModelCreating(ModelBuilder model)
     {
         model.Entity<TatPolicy>().Property(p => p.Id).ValueGeneratedNever();
-        model.Entity<TatPolicy>().ToTable("TatPolicies", t => t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760"));
+        model.Entity<TatPolicy>().ToTable("TatPolicies", t => t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760 AND L1ResponseHours BETWEEN 1 AND 8760 AND L2ResponseHours BETWEEN 1 AND 8760"));
         model.Entity<TicketEscalation>().HasOne(e => e.Ticket).WithMany().HasForeignKey(e => e.TicketId).OnDelete(DeleteBehavior.Cascade);
         model.Entity<TatPolicy>().Property(p => p.Id).ValueGeneratedNever();
-        model.Entity<TatPolicy>().ToTable("TatPolicies", t => t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760"));
+        model.Entity<TatPolicy>().ToTable("TatPolicies", t => t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760 AND L1ResponseHours BETWEEN 1 AND 8760 AND L2ResponseHours BETWEEN 1 AND 8760"));
         model.Entity<TicketEscalation>().HasOne(e => e.Staff).WithMany().HasForeignKey(e => e.StaffId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<StaffProject>().Property(m => m.SupportLevel).HasDefaultValue(SupportLevel.L1);
         model.Entity<StaffProject>().ToTable("StaffProjects", t => t.HasCheckConstraint("CK_StaffProject_Level", "SupportLevel BETWEEN 1 AND 3"));
@@ -77,10 +78,12 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
         model.Entity<Ticket>().Property(t => t.Status).IsConcurrencyToken();
         model.Entity<Ticket>().Property(t => t.SupportLevel).IsConcurrencyToken();
         model.Entity<Ticket>().Property(t => t.AssigneeId).IsConcurrencyToken();
+        model.Entity<Ticket>().HasIndex(t => t.SourceEmailMessageId).IsUnique().HasFilter("[SourceEmailMessageId] IS NOT NULL");
         model.Entity<Ticket>().HasOne(t => t.Project).WithMany().HasForeignKey(t => new { t.ClientId, t.ProjectId }).HasPrincipalKey(p => new { p.ClientId, p.Id }).OnDelete(DeleteBehavior.Restrict);
         model.Entity<Ticket>().HasOne(t => t.Client).WithMany().HasForeignKey(t => t.ClientId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<Ticket>().HasOne(t => t.Requester).WithMany().HasForeignKey(t => t.RequesterId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<Ticket>().HasOne(t => t.Assignee).WithMany().HasForeignKey(t => t.AssigneeId).OnDelete(DeleteBehavior.Restrict);
+        model.Entity<TicketAttachment>().HasOne(a => a.Ticket).WithMany(t => t.Attachments).HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
         model.Entity<Ticket>().ToTable("Tickets", t => {
             t.HasCheckConstraint("CK_Ticket_Level", "SupportLevel BETWEEN 1 AND 3");
             t.HasCheckConstraint("CK_Ticket_Severity", "Severity BETWEEN 0 AND 3");
@@ -90,6 +93,7 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
         model.Entity<TicketActivity>().HasOne(a => a.Ticket).WithMany().HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
         model.Entity<TicketActivity>().HasIndex(a => new { a.TicketId, a.CreatedAt });
         model.Entity<TicketComment>().HasOne(c => c.Ticket).WithMany(t => t.Comments).HasForeignKey(c => c.TicketId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<TicketComment>().HasIndex(c => c.SourceEmailMessageId).IsUnique().HasFilter("[SourceEmailMessageId] IS NOT NULL");
     }
 }
 

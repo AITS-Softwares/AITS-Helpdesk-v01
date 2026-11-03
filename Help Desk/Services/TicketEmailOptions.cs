@@ -3,6 +3,10 @@ namespace Help_Desk.Services;
 public class TicketEmailOptions
 {
     public bool Enabled { get; set; }
+    public bool IncomingEnabled { get; set; }
+    public string IncomingHost { get; set; } = "imap.gmail.com";
+    public int IncomingPort { get; set; } = 993;
+    public string SupportAddress { get; set; } = "";
     public string Host { get; set; } = "smtp.gmail.com";
     public int Port { get; set; } = 587;
     public string UserName { get; set; } = "";

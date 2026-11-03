@@ -7,48 +7,56 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Help_Desk.Controllers;
 
-// Clients are the customer companies supported by AITS.
+// Customers are supported by AITS.
 [Authorize(Roles = "Admin")]
 public class ClientsController(HelpDeskDbContext db, DeskStore store) : Controller
 {
     public async Task<IActionResult> Index()
     {
-        ViewBag.Projects = await db.Projects.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
-        return View(store.Read());
+        var data = store.Read();
+        ViewBag.Agents = await db.AitsStaff.AsNoTracking().Where(staff => staff.IsActive).OrderBy(staff => staff.Name).ToListAsync();
+        var memberships = await db.StaffProjects.AsNoTracking().Include(membership => membership.Project).ToListAsync();
+        ViewBag.TeamAssignments = memberships
+            .Where(membership => membership.Project is not null)
+            .GroupBy(membership => membership.Project!.ClientId)
+            .ToDictionary(group => group.Key, group => group
+                .GroupBy(membership => membership.SupportLevel)
+                .ToDictionary(level => level.Key, level => level.Select(membership => membership.StaffId).Distinct().OrderBy(id => id).ToList()));
+        return View(data);
     }
-    public async Task<IActionResult> Project(int id)
-    {
-        var project = await db.Projects.AsNoTracking().Include(p => p.Client).SingleOrDefaultAsync(p => p.Id == id);
-        if (project is null) return NotFound();
-        return View(new ProjectTeamViewModel { Project = project,
-            Staff = await db.AitsStaff.AsNoTracking().OrderBy(s => s.Name).ToListAsync(),
-            Members = await db.StaffProjects.AsNoTracking().Where(m => m.ProjectId == id).ToListAsync() });
-    }
+
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> AssignTeam(int id, List<int> l1, List<int> l2, List<int> l3)
+    public async Task<IActionResult> AssignTeam(int clientId, int[]? l1StaffIds, int[]? l2StaffIds, int[]? l3StaffIds)
     {
-        if (!await db.Projects.AnyAsync(p => p.Id == id)) return NotFound();
-        var selected = l1.Select(s => (Id: s, Level: SupportLevel.L1)).Concat(l2.Select(s => (Id: s, Level: SupportLevel.L2)))
-            .Concat(l3.Select(s => (Id: s, Level: SupportLevel.L3))).ToList();
-        if (selected.Select(s => s.Id).Distinct().Count() != selected.Count) {
-            TempData["Error"] = "Assign each staff member to only one level in this project.";
-            return RedirectToAction(nameof(Project), new { id });
+        var projects = await db.Projects.Where(project => project.ClientId == clientId).ToListAsync();
+        if (projects.Count == 0 || !await db.Companies.AnyAsync(customer => customer.Id == clientId)) return NotFound();
+        var selected = new Dictionary<SupportLevel, List<int>> {
+            [SupportLevel.L1] = (l1StaffIds ?? []).Distinct().ToList(),
+            [SupportLevel.L2] = (l2StaffIds ?? []).Distinct().ToList(),
+            [SupportLevel.L3] = (l3StaffIds ?? []).Distinct().ToList()
+        };
+        var submittedCount = (l1StaffIds?.Length ?? 0) + (l2StaffIds?.Length ?? 0) + (l3StaffIds?.Length ?? 0);
+        var selectedIds = selected.Values.SelectMany(ids => ids).Distinct().ToList();
+        if (submittedCount != selectedIds.Count) {
+            TempData["Error"] = "Choose a different agent for each support level.";
+            return RedirectToAction(nameof(Index));
         }
-        var ids = selected.Select(s => s.Id).ToList();
-        if (await db.AitsStaff.CountAsync(s => ids.Contains(s.Id) && s.IsActive) != ids.Count) {
-            TempData["Error"] = "Select active AITS staff only.";
-            return RedirectToAction(nameof(Project), new { id });
+        if (selectedIds.Count > 0 && await db.AitsStaff.CountAsync(staff => selectedIds.Contains(staff.Id) && staff.IsActive) != selectedIds.Count) {
+            TempData["Error"] = "Choose active agents only. Reload the page and try again.";
+            return RedirectToAction(nameof(Index));
         }
-        var current = await db.StaffProjects.Where(m => m.ProjectId == id).ToListAsync();
-        db.StaffProjects.RemoveRange(current.Where(m => !ids.Contains(m.StaffId)));
-        foreach (var member in selected) {
-            var existing = current.SingleOrDefault(m => m.StaffId == member.Id);
-            if (existing is null) db.StaffProjects.Add(new StaffProject { ProjectId = id, StaffId = member.Id, SupportLevel = member.Level });
-            else existing.SupportLevel = member.Level;
+        var projectIds = projects.Select(project => project.Id).ToList();
+        db.StaffProjects.RemoveRange(db.StaffProjects.Where(membership => projectIds.Contains(membership.ProjectId)));
+        foreach (var project in projects)
+            foreach (var assignment in selected)
+                foreach (var staffId in assignment.Value)
+                    db.StaffProjects.Add(new StaffProject { ProjectId = project.Id, StaffId = staffId, SupportLevel = assignment.Key });
+        try {
+            await db.SaveChangesAsync();
+            TempData["Message"] = "L1, L2, and L3 agent assignments saved for this customer's projects.";
         }
-        await db.SaveChangesAsync();
-        TempData["Message"] = "Project team saved. Company/project access follows these assignments.";
-        return RedirectToAction(nameof(Project), new { id });
+        catch (DbUpdateException) { TempData["Error"] = "Agent assignments could not be saved. Reload and try again."; }
+        return RedirectToAction(nameof(Index));
     }
     [Authorize(Roles = "Admin")]
     public IActionResult Create() => View("Edit", new Client());
@@ -61,55 +69,37 @@ public class ClientsController(HelpDeskDbContext db, DeskStore store) : Controll
     public async Task<IActionResult> Details(int id)
     {
         if (!await db.Companies.AnyAsync(c => c.Id == id)) return NotFound();
-        ViewBag.Projects = await db.Projects.AsNoTracking().Where(p => p.ClientId == id).OrderBy(p => p.Name).ToListAsync();
         ViewBag.ClientId = id;
         return View(store.Read());
     }
     [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Save([Bind("Id,Name,Email,Phone")] Client company)
+    public async Task<IActionResult> Save([Bind("Id,Name,Email,EmailDomains,Phone")] Client company)
     {
         var existing = company.Id == 0 ? null : await db.Companies.FindAsync(company.Id);
         if (company.Id != 0 && existing is null) return NotFound();
         company.Name = company.Name?.Trim() ?? "";
         company.Email = company.Email?.Trim() ?? "";
+        var emailRules = (company.EmailDomains ?? "").Split(['\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(d => d.TrimStart('@').ToLowerInvariant()).Where(d => d.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var invalidRule = emailRules.FirstOrDefault(rule => rule.Contains('@')
+            ? !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(rule)
+            : !System.Text.RegularExpressions.Regex.IsMatch(rule, @"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"));
+        if (invalidRule is not null) ModelState.AddModelError("EmailDomains", $"'{invalidRule}' is not a valid email address or domain.");
+        company.EmailDomains = string.Join("\n", emailRules);
         company.Phone = company.Phone?.Trim();
         if (await db.Companies.AnyAsync(c => c.Id != company.Id && c.Name == company.Name))
-            ModelState.AddModelError("Name", "A company with this name already exists.");
+            ModelState.AddModelError("Name", "A customer with this name already exists.");
         if (!ModelState.IsValid) return View("Edit", company);
         var entity = existing ?? company;
-        if (existing is null) db.Companies.Add(entity);
-        else { existing.Name = company.Name; existing.Email = company.Email; existing.Phone = company.Phone; }
+        if (existing is null) {
+            db.Companies.Add(entity);
+            db.Projects.Add(new CompanyProject { Client = entity, Name = "General" });
+        }
+        else { existing.Name = company.Name; existing.Email = company.Email; existing.EmailDomains = company.EmailDomains; existing.Phone = company.Phone; }
         try { await db.SaveChangesAsync(); }
-        catch (DbUpdateException) { ModelState.AddModelError("", "Unable to save. The company may already exist or have changed. Reload and try again."); return View("Edit", company); }
-        TempData["Message"] = "Company saved successfully.";
+        catch (DbUpdateException) { ModelState.AddModelError("", "Unable to save. The customer may already exist or have changed. Reload and try again."); return View("Edit", company); }
+        TempData["Message"] = "Customer saved successfully.";
         return RedirectToAction(nameof(Details), new { id = entity.Id });
-    }
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Admin")]
-    public async Task<IActionResult> AddProject(int clientId, string? name)
-    {
-        if (!await db.Companies.AnyAsync(c => c.Id == clientId)) return NotFound();
-        name = name?.Trim();
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 120)
-            TempData["Error"] = "Enter a project name between 1 and 120 characters.";
-        else {
-            db.Projects.Add(new CompanyProject { ClientId = clientId, Name = name });
-            try { await db.SaveChangesAsync(); TempData["Message"] = "Project added."; }
-            catch (DbUpdateException) { TempData["Error"] = "Unable to add project. This name may already exist for this company."; }
-        }
-        return RedirectToAction(nameof(Details), new { id = clientId });
-    }
-    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = "Admin")]
-    public async Task<IActionResult> RemoveProject(int id)
-    {
-        var project = await db.Projects.FindAsync(id);
-        if (project is null) return NotFound();
-        if (await db.Tickets.AnyAsync(t => t.ProjectId == id)) TempData["Error"] = "Projects used by tickets cannot be removed.";
-        else {
-            db.Projects.Remove(project);
-            try { await db.SaveChangesAsync(); TempData["Message"] = "Project removed."; }
-            catch (DbUpdateException) { TempData["Error"] = "This project is still in use."; }
-        }
-        return RedirectToAction(nameof(Details), new { id = project.ClientId });
     }
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
@@ -124,12 +114,12 @@ public class ClientsController(HelpDeskDbContext db, DeskStore store) : Controll
         if (company is null) return NotFound();
         if (await db.Users.AnyAsync(u => u.ClientId == id) || await db.Tickets.AnyAsync(t => t.ClientId == id))
         {
-            TempData["Error"] = "This company has users or tickets. Remove or reassign them before deleting the company.";
+            TempData["Error"] = "This customer has users or tickets. Remove or reassign them before deleting the customer.";
             return RedirectToAction(nameof(Details), new { id });
         }
         db.Projects.RemoveRange(db.Projects.Where(p => p.ClientId == id));
         db.Companies.Remove(company);
-        try { await db.SaveChangesAsync(); TempData["Message"] = "Company deleted."; }
+        try { await db.SaveChangesAsync(); TempData["Message"] = "Customer deleted."; }
         catch (DbUpdateException) { TempData["Error"] = "The company could not be deleted because it is still in use."; }
         return RedirectToAction(nameof(Index));
     }

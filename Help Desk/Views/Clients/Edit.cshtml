@@ -1,4 +1,36 @@
 @model Client
-@{ ViewData["Title"] = Model.Id == 0 ? "Add company" : "Edit company"; }
-<div class="page-heading"><div><a asp-action="Index">← Back to companies</a><h1>@ViewData["Title"]</h1></div></div>
-<form asp-action="Save" method="post" class="panel form-panel"><input asp-for="Id" type="hidden" /><div asp-validation-summary="All" class="validation"></div><label asp-for="Name">Company name</label><input asp-for="Name" maxlength="120" /><label asp-for="Email">Contact email</label><input asp-for="Email" type="email" maxlength="160" /><label asp-for="Phone"></label><input asp-for="Phone" maxlength="40" /><div class="form-actions"><button class="button">Save company</button><a asp-action="Index">Cancel</a></div></form>
+@{ ViewData["Title"] = Model.Id == 0 ? "Add customer" : "Edit customer"; var emailRules = (Model.EmailDomains ?? "").Split(['\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); }
+<div class="page-heading"><div><a asp-action="Index">← Back to customers</a><h1>@ViewData["Title"]</h1></div></div>
+<form asp-action="Save" method="post" class="panel form-panel" id="customer-form"><input asp-for="Id" type="hidden" /><div asp-validation-summary="All" class="validation"></div><label asp-for="Name">Customer name</label><input asp-for="Name" maxlength="120" /><label asp-for="Email">Contact email</label><input asp-for="Email" type="email" maxlength="160" /><label>Allowed email addresses or domains</label><div id="email-rules" class="email-rule-list">
+@if (emailRules.Length > 0) { foreach (var rule in emailRules) { <div class="email-rule-row"><input class="email-rule-input" type="text" value="@rule" maxlength="254" placeholder="example.com or person@example.com" aria-label="Allowed email address or domain" /><button type="button" class="text-button text-danger remove-email-rule" aria-label="Remove email or domain">Remove</button></div> } } else { <div class="email-rule-row"><input class="email-rule-input" type="text" maxlength="254" placeholder="example.com or person@example.com" aria-label="Allowed email address or domain" /><button type="button" class="text-button text-danger remove-email-rule" aria-label="Remove email or domain">Remove</button></div> }
+</div><input asp-for="EmailDomains" type="hidden" /><button id="add-email-rule" type="button" class="button button-secondary">+ Add email or domain</button><small>Add each sender email separately (for example, pranavnimbalkar9696@gmail.com), or add a domain (for example, maybank.com) to accept everyone at that domain. Senders email the Support email address in Email settings; each matching message creates a ticket for this customer and routes it to an active L1 agent assigned to the customer's project. No customer user setup is needed.</small><label asp-for="Phone"></label><input asp-for="Phone" maxlength="40" /><div class="form-actions"><button class="button" type="submit">Save customer</button><a asp-action="Index">Cancel</a></div></form>
+@section Scripts {
+<script>
+    const ruleList = document.getElementById('email-rules');
+    const ruleTemplate = () => {
+        const row = document.createElement('div');
+        row.className = 'email-rule-row';
+        const input = document.createElement('input');
+        input.className = 'email-rule-input'; input.type = 'text'; input.maxLength = 254;
+        input.placeholder = 'example.com or person@example.com'; input.setAttribute('aria-label', 'Allowed email address or domain');
+        const remove = document.createElement('button');
+        remove.type = 'button'; remove.className = 'text-button text-danger remove-email-rule';
+        remove.setAttribute('aria-label', 'Remove email or domain'); remove.textContent = 'Remove';
+        row.append(input, remove);
+        return row;
+    };
+    document.getElementById('add-email-rule').addEventListener('click', () => {
+        const row = ruleTemplate(); ruleList.append(row); row.querySelector('input').focus();
+    });
+    ruleList.addEventListener('click', event => {
+        const button = event.target.closest('.remove-email-rule');
+        if (!button) return;
+        button.closest('.email-rule-row').remove();
+        if (!ruleList.querySelector('.email-rule-row')) ruleList.append(ruleTemplate());
+    });
+    document.getElementById('customer-form').addEventListener('submit', () => {
+        document.getElementById('EmailDomains').value = [...ruleList.querySelectorAll('.email-rule-input')]
+            .map(input => input.value.trim()).filter(Boolean).join('\n');
+    });
+</script>
+}

@@ -3,6 +3,10 @@ namespace Help_Desk.Models;
 public class EmailSettingsViewModel
 {
     public bool Enabled { get; set; }
+    public bool IncomingEnabled { get; set; }
+    [StringLength(253)] public string IncomingHost { get; set; } = "imap.gmail.com";
+    [Range(1,65535)] public int IncomingPort { get; set; } = 993;
+    [EmailAddress, StringLength(160)] public string? SupportAddress { get; set; }
     [Required, EmailAddress, StringLength(160)] public string UserName { get; set; } = "";
     [Required, EmailAddress, StringLength(160)] public string FromAddress { get; set; } = "";
     [Required, StringLength(100)] public string FromName { get; set; } = "AITS Helpdesk";

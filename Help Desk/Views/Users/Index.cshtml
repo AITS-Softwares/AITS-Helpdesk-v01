@@ -1,39 +1,39 @@
 @model List<DeskUser>
 @{
     var staff = (bool)ViewBag.IsStaff;
-    var companies = (List<Client>)ViewBag.Clients;
+    var customers = (List<Client>)ViewBag.Clients;
     var enabledUserIds = (HashSet<int>)ViewBag.EnabledUserIds;
     var staffProjects = staff ? (Dictionary<int, List<string>>)ViewBag.StaffProjects : new Dictionary<int, List<string>>();
-    ViewData["Title"] = staff ? "AITS staff" : "Client users";
+    ViewData["Title"] = staff ? "Agents" : "Customer users";
 }
 <div class="page-heading">
     <div><p class="eyebrow">YOUR WORKSPACE DIRECTORY</p><h1>@ViewData["Title"] <span class="count">@Model.Count</span></h1>
-    <p class="muted">@(staff ? "Manage internal AITS staff and their project assignments." : "View client users by company.")</p></div>
-    <a class="button" asp-action="Create" asp-route-staff="@staff" asp-route-clientId="@ViewBag.ClientId">@(staff ? "+ Add AITS staff" : "+ Add client user")</a>
+    <p class="muted">@(staff ? "Manage internal agents and their customer assignments." : "View customer users by customer.")</p></div>
+    @if (staff) { <a class="button" asp-action="Create" asp-route-staff="true">+ Add agent</a> }
 </div>
 <section class="panel">
     @if (!staff) {
         <form asp-action="ClientUsers" method="get" class="filters">
-            <select name="clientId" aria-label="Company">
-                <option value="">All companies</option>
-                @foreach (var company in companies) { <option value="@company.Id" selected="@(ViewBag.ClientId == company.Id)">@company.Name</option> }
+            <select name="clientId" aria-label="Customer">
+                <option value="">All customers</option>
+                @foreach (var customer in customers) { <option value="@customer.Id" selected="@(ViewBag.ClientId == customer.Id)">@customer.Name</option> }
             </select>
             <button class="button" type="submit">Filter</button><a asp-action="ClientUsers">Reset</a>
         </form>
     }
     <div class="table-scroll"><table>
-        <thead><tr><th>Name</th><th>Email</th><th>Department</th>@if (!staff) { <th>Company</th> } else { <th>Projects</th> }<th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Department</th>@if (!staff) { <th>Customer</th> } else { <th>Assigned customers</th> }<th>Actions</th></tr></thead>
         <tbody>@foreach (var user in Model) {
             <tr><td><strong>@user.Name</strong></td><td>@user.Email</td><td>@user.Department</td>
-            @if (!staff) { <td>@companies.Find(c => c.Id == user.ClientId)?.Name</td> }
+            @if (!staff) { <td>@customers.Find(c => c.Id == user.ClientId)?.Name</td> }
             @if (staff) {
-                <td class="project-summary">@if (staffProjects.TryGetValue(user.Id, out var assigned)) { @foreach (var project in assigned) { <div>@project</div> } } else { <span class="muted">No projects assigned</span> }</td>
+                <td class="project-summary">@if (staffProjects.TryGetValue(user.Id, out var assigned)) { @foreach (var customer in assigned) { <div>@customer</div> } } else { <span class="muted">No customers assigned</span> }</td>
             }
             <td><div class="row-actions">
-                @if (staff && User.IsInRole("Admin")) { <a asp-action="Projects" asp-route-id="@user.Id">Assign projects</a> }
-                <a asp-action="Edit" asp-route-id="@user.Id">Edit</a><a asp-action="Delete" asp-route-id="@user.Id">Delete</a>@if (enabledUserIds.Contains(user.Id)) { <span class="badge status-active">Sign-in enabled</span> } else { <a asp-controller="Account" asp-action="Create" asp-route-userId="@user.Id">Enable sign-in</a> }
+                @if (staff && User.IsInRole("Admin")) { <a asp-action="AssignCustomers" asp-route-id="@user.Id">Assign customers</a> }
+                <a class="action-control" asp-action="Edit" asp-route-id="@user.Id"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg><span>Edit</span></a><form asp-action="Delete" method="post" class="inline-delete-form" data-confirm-delete data-confirm-title="Delete user?" data-confirm-message="Delete @user.Name? This cannot be undone. Users referenced by tickets cannot be deleted."><input type="hidden" name="id" value="@user.Id" /><button class="action-control action-control--delete" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Delete</span></button></form>@if (enabledUserIds.Contains(user.Id)) { <span class="badge status-active">Sign-in enabled</span> } else { <a asp-controller="Account" asp-action="Create" asp-route-userId="@user.Id">Enable sign-in</a> }
             </div></td></tr>
         }</tbody>
     </table></div>
-    @if (!Model.Any()) { <div class="empty">@(staff ? "No AITS staff added yet." : "No client users found for this company.")</div> }
+    @if (!Model.Any()) { <div class="empty">@(staff ? "No Agents added yet." : "No customer users found for this customer.")</div> }
 </section>

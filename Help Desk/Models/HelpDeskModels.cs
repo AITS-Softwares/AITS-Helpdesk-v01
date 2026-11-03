@@ -14,6 +14,7 @@ public class Client
     public int Id { get; set; }
     [Required, StringLength(120)] public string Name { get; set; } = "";
     [Required, EmailAddress, StringLength(160)] public string Email { get; set; } = "";
+    [StringLength(2000)] public string EmailDomains { get; set; } = "";
     [StringLength(40)] public string? Phone { get; set; }
 }
 public class CompanyProject
@@ -71,6 +72,7 @@ public class Ticket
     [EnumDataType(typeof(SupportLevel))] public SupportLevel SupportLevel { get; set; } = SupportLevel.L1;
     [EnumDataType(typeof(TicketSeverity))] public TicketSeverity Severity { get; set; } = TicketSeverity.Medium;
     public int? ProjectId { get; set; }
+    [StringLength(320)] public string? SourceEmailMessageId { get; set; }
     [ValidateNever, JsonIgnore] public CompanyProject? Project { get; set; }
     [ValidateNever, JsonIgnore] public Client? Client { get; set; }
     [ValidateNever, JsonIgnore] public ClientDeskUser? Requester { get; set; }
@@ -83,6 +85,7 @@ public class Ticket
     [EnumDataType(typeof(TicketPriority))] public TicketPriority Priority { get; set; } = TicketPriority.Medium;
     [Range(1, int.MaxValue, ErrorMessage = "Select a requester.")] public int RequesterId { get; set; }
     public int? AssigneeId { get; set; }
+    public DateTime SupportLevelStartedAt { get; set; } = DateTime.UtcNow;
     public bool HasCustomTat { get; set; }
     public DateTime? ResolutionDueAt { get; set; }
     public DateTime? WorkStartedAt { get; set; }
@@ -90,6 +93,24 @@ public class Ticket
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public List<TicketComment> Comments { get; set; } = [];
+    public List<TicketAttachment> Attachments { get; set; } = [];
+}
+public class TicketAttachment
+{
+    public int Id { get; set; }
+    public int TicketId { get; set; }
+    [ValidateNever, JsonIgnore] public Ticket? Ticket { get; set; }
+    [JsonIgnore] public byte[] Data { get; set; } = [];
+    [StringLength(255)] public string FileName { get; set; } = "";
+    [StringLength(160)] public string ContentType { get; set; } = "application/octet-stream";
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+}
+public class TicketAttachmentInfo
+{
+    public int Id { get; set; }
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public DateTime UploadedAt { get; set; }
 }
 public class TicketPhoto
 {
@@ -102,6 +123,7 @@ public class TicketPhoto
 }
 public class TicketComment
 {
+    [StringLength(320)] public string? SourceEmailMessageId { get; set; }
     [StringLength(80)] public string? AuthorName { get; set; }
     [StringLength(20)] public string? AuthorRole { get; set; }
     public int Id { get; set; }
@@ -135,7 +157,7 @@ public class StaffProjectsViewModel
 {
     [ValidateNever] public DeskUser Staff { get; set; } = new AitsStaffUser();
     [ValidateNever] public List<CompanyProject> Projects { get; set; } = [];
-    public List<int> SelectedProjectIds { get; set; } = [];
+    public List<int> SelectedClientIds { get; set; } = [];
 }
 
 public class ProjectTeamViewModel

@@ -1,6 +1,467 @@
 @model SignupViewModel
-@{ Layout = "_AuthLayout"; ViewData["Title"] = "Client sign up"; }
-<p class="eyebrow">CLIENT REGISTRATION</p><h2>Create your account</h2><p class="muted">Select your company to get started. Companies are created by an AITS admin.</p>
-<form asp-action="Signup" method="post"><div asp-validation-summary="All" class="validation" role="alert"></div><label asp-for="Name">Full name</label><input asp-for="Name" maxlength="80" autocomplete="name" required /><label asp-for="Email">Work email</label><input asp-for="Email" type="email" maxlength="160" autocomplete="username" required /><label asp-for="ClientId">Company</label><select asp-for="ClientId" required><option value="">Select your company</option>@foreach (var company in Model.Companies) { <option value="@company.Id">@company.Name</option> }</select><label asp-for="Department"></label><input asp-for="Department" maxlength="80" required /><label asp-for="Password"></label><input asp-for="Password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required /><small class="muted">Use at least 8 characters.</small><label asp-for="ConfirmPassword">Confirm password</label><input asp-for="ConfirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required /><button class="button auth-submit" type="submit">Create client account</button></form><p class="auth-link">Already registered? <a asp-action="Login">Sign in</a></p>
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Client sign up";
+}
 
-<p class="auth-link">An AITS team member? <a asp-action="AitsSignup">AITS sign up</a></p>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap" />
+
+<style>
+    .aits-signup {
+        --ink: #14263a;
+        --ink-soft: #c9d6e2;
+        --teal: #0f7b8a;
+        --teal-dark: #0b5f6b;
+        --tint: #e4f1f0;
+        --signal: #f2b544;
+        --page: #eef2f5;
+        --surface: #ffffff;
+        --text: #1b2733;
+        --muted: #5b6b7a;
+        --line: #d5dde4;
+        --danger: #b3261e;
+        font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        background: var(--page);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: clamp(1rem, 4vw, 3rem);
+        box-sizing: border-box;
+    }
+
+        .aits-signup *,
+        .aits-signup *::before,
+        .aits-signup *::after {
+            box-sizing: border-box;
+        }
+
+    .aits-card {
+        width: 100%;
+        max-width: 62rem;
+        display: grid;
+        grid-template-columns: 1fr;
+        background: var(--surface);
+        border-radius: 1.25rem;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(20, 38, 58, 0.06), 0 12px 32px rgba(20, 38, 58, 0.1);
+    }
+
+    /* ---------- Left panel ---------- */
+    .aits-aside {
+        background: var(--ink);
+        color: #fff;
+        padding: clamp(1.5rem, 4vw, 3rem);
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+        .aits-aside h1 {
+            font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+            font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+            line-height: 1.1;
+            margin: 0;
+            letter-spacing: -0.01em;
+        }
+
+        .aits-aside p {
+            margin: 0;
+            color: var(--ink-soft);
+            line-height: 1.55;
+            max-width: 34ch;
+        }
+
+    .aits-points {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 1rem;
+    }
+
+        .aits-points li {
+            display: grid;
+            grid-template-columns: 2rem 1fr;
+            column-gap: 0.9rem;
+            align-items: start;
+        }
+
+    .aits-point-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--signal);
+        color: var(--ink);
+    }
+
+        .aits-point-icon svg {
+            width: 1.05rem;
+            height: 1.05rem;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2.2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+    .aits-points strong {
+        display: block;
+        font-weight: 600;
+        line-height: 2rem;
+    }
+
+    .aits-points span.aits-point-text {
+        color: var(--ink-soft);
+        font-size: 0.92rem;
+        line-height: 1.45;
+    }
+
+    .aits-aside .aits-aside-links {
+        margin-top: auto;
+        font-size: 0.92rem;
+    }
+
+    .aits-aside-links a {
+        color: #fff;
+        font-weight: 600;
+    }
+
+    /* ---------- Right panel ---------- */
+    .aits-main {
+        padding: clamp(1.5rem, 4vw, 3rem);
+    }
+
+        .aits-main h2 {
+            font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+            font-size: clamp(1.5rem, 3vw, 1.9rem);
+            margin: 0 0 0.35rem;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+        }
+
+        .aits-main .aits-lead {
+            margin: 0 0 1.5rem;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+    .aits-form {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem 1.1rem;
+    }
+
+    .aits-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        min-width: 0;
+    }
+
+        .aits-field label {
+            font-weight: 600;
+            font-size: 0.92rem;
+            color: var(--ink);
+        }
+
+        .aits-field input,
+        .aits-field select {
+            width: 100%;
+            font: inherit;
+            color: var(--text);
+            background: #fff;
+            border: 1.5px solid var(--line);
+            border-radius: 0.6rem;
+            padding: 0.7rem 0.85rem;
+            min-height: 2.9rem;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .aits-field select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 2.5rem;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6b7a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.8rem center;
+            background-size: 1.1rem;
+        }
+
+            .aits-field input:hover,
+            .aits-field select:hover {
+                border-color: #b4c1cc;
+            }
+
+            .aits-field input:focus-visible,
+            .aits-field select:focus-visible {
+                outline: none;
+                border-color: var(--teal);
+                box-shadow: 0 0 0 3px rgba(15, 123, 138, 0.22);
+            }
+
+            .aits-field input.input-validation-error,
+            .aits-field select.input-validation-error {
+                border-color: var(--danger);
+            }
+
+    .aits-hint {
+        font-size: 0.82rem;
+        color: var(--muted);
+    }
+
+    .aits-field .field-validation-error {
+        color: var(--danger);
+        font-size: 0.85rem;
+    }
+
+    .aits-pw {
+        position: relative;
+    }
+
+        .aits-pw input {
+            padding-right: 4.2rem;
+        }
+
+    .aits-pw-toggle {
+        position: absolute;
+        right: 0.35rem;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 0;
+        background: transparent;
+        color: var(--teal-dark);
+        font: inherit;
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.4rem 0.55rem;
+        border-radius: 0.4rem;
+        cursor: pointer;
+    }
+
+        .aits-pw-toggle:hover {
+            background: var(--tint);
+        }
+
+        .aits-pw-toggle:focus-visible {
+            outline: 2px solid var(--teal);
+            outline-offset: 1px;
+        }
+
+    .aits-main .validation {
+        grid-column: 1 / -1;
+        background: #fdecea;
+        border: 1px solid #f3c1bd;
+        color: var(--danger);
+        border-radius: 0.6rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.92rem;
+    }
+
+        .aits-main .validation.validation-summary-valid,
+        .aits-main .validation:empty {
+            display: none;
+        }
+
+        .aits-main .validation ul {
+            margin: 0;
+            padding-left: 1.1rem;
+        }
+
+    .aits-submit {
+        grid-column: 1 / -1;
+        margin-top: 0.4rem;
+        font: inherit;
+        font-weight: 600;
+        font-size: 1rem;
+        color: #fff;
+        background: var(--teal);
+        border: 0;
+        border-radius: 0.65rem;
+        min-height: 3rem;
+        padding: 0.75rem 1.25rem;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.05s;
+    }
+
+        .aits-submit:hover {
+            background: var(--teal-dark);
+        }
+
+        .aits-submit:active {
+            transform: translateY(1px);
+        }
+
+        .aits-submit:focus-visible {
+            outline: 3px solid var(--signal);
+            outline-offset: 2px;
+        }
+
+    .aits-footer-links {
+        margin: 1.5rem 0 0;
+        padding-top: 1.1rem;
+        border-top: 1px solid var(--line);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1.5rem;
+        font-size: 0.92rem;
+        color: var(--muted);
+    }
+
+        .aits-footer-links a {
+            color: var(--teal-dark);
+            font-weight: 600;
+            text-underline-offset: 3px;
+        }
+
+            .aits-footer-links a:focus-visible,
+            .aits-aside-links a:focus-visible {
+                outline: 2px solid var(--signal);
+                outline-offset: 2px;
+                border-radius: 2px;
+            }
+
+    /* ---------- Responsive ---------- */
+    @@media (min-width: 40rem) {
+        .aits-form {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .aits-field.is-wide {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @@media (min-width: 62rem) {
+        .aits-card {
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        }
+    }
+
+    @@media (max-width: 61.99rem) {
+        .aits-points,
+        .aits-aside .aits-aside-links {
+            display: none;
+        }
+
+        .aits-aside {
+            gap: 0.75rem;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .aits-signup * {
+            transition: none !important;
+        }
+    }
+</style>
+
+<div class="aits-signup">
+    <div class="aits-card">
+
+        <aside class="aits-aside">
+            <h1>Get support from AITS</h1>
+            <p>Create your account to raise and track support requests for your company.</p>
+
+            <ul class="aits-points">
+                <li>
+                    <span class="aits-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>
+                    <div><strong>Raise requests</strong><span class="aits-point-text">Tell us what you need and we pick it up.</span></div>
+                </li>
+                <li>
+                    <span class="aits-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h4l3 7 4-14 3 7h4" /></svg></span>
+                    <div><strong>Track progress</strong><span class="aits-point-text">See the status of every request in one place.</span></div>
+                </li>
+                <li>
+                    <span class="aits-point-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /></svg></span>
+                    <div><strong>Work with your team</strong><span class="aits-point-text">Your colleagues at the same company share one customer space.</span></div>
+                </li>
+            </ul>
+
+            <p class="aits-aside-links">AITS team member? <a asp-action="AitsSignup">Create an Agent account</a></p>
+        </aside>
+
+        <main class="aits-main">
+            <h2>Create your account</h2>
+            <p class="aits-lead">Select your customer to get started. Customers are created by an AITS admin.</p>
+
+            <form asp-action="Signup" method="post" class="aits-form" novalidate>
+                <div asp-validation-summary="All" class="validation" role="alert"></div>
+
+                <div class="aits-field">
+                    <label asp-for="Name">Full name</label>
+                    <input asp-for="Name" maxlength="80" autocomplete="name" required />
+                    <span asp-validation-for="Name"></span>
+                </div>
+
+                <div class="aits-field">
+                    <label asp-for="Department"></label>
+                    <input asp-for="Department" maxlength="80" required />
+                    <span asp-validation-for="Department"></span>
+                </div>
+
+                <div class="aits-field is-wide">
+                    <label asp-for="Email">Work email</label>
+                    <input asp-for="Email" type="email" maxlength="160" autocomplete="username" required />
+                    <span asp-validation-for="Email"></span>
+                </div>
+
+                <div class="aits-field is-wide">
+                    <label asp-for="ClientId">Customer</label>
+                    <select asp-for="ClientId" required>
+                        <option value="">Select your customer</option>
+                        @foreach (var customer in Model.Companies)
+                        {
+                            <option value="@customer.Id">@customer.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="ClientId"></span>
+                </div>
+
+                <div class="aits-field">
+                    <label asp-for="Password"></label>
+                    <div class="aits-pw">
+                        <input asp-for="Password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        <button type="button" class="aits-pw-toggle" data-target="Password" aria-label="Show password">Show</button>
+                    </div>
+                    <small class="aits-hint">Use at least 8 characters.</small>
+                    <span asp-validation-for="Password"></span>
+                </div>
+
+                <div class="aits-field">
+                    <label asp-for="ConfirmPassword">Confirm password</label>
+                    <div class="aits-pw">
+                        <input asp-for="ConfirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required />
+                        <button type="button" class="aits-pw-toggle" data-target="ConfirmPassword" aria-label="Show confirmation password">Show</button>
+                    </div>
+                    <span asp-validation-for="ConfirmPassword"></span>
+                </div>
+
+                <button class="aits-submit" type="submit">Create customer account</button>
+            </form>
+
+            <div class="aits-footer-links">
+                <span>Already registered? <a asp-action="Login">Sign in</a></span>
+                <span>An Agent team member? <a asp-action="AitsSignup">AITS sign up</a></span>
+            </div>
+        </main>
+
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('.aits-pw-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var input = document.getElementById(btn.dataset.target);
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.textContent = show ? 'Hide' : 'Show';
+        btn.setAttribute('aria-pressed', show);
+      });
+    });
+</script>

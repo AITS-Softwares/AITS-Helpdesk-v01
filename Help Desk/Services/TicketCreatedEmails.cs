@@ -8,7 +8,7 @@ namespace Help_Desk.Services;
 
 public class TicketCreatedEmails(HelpDeskDbContext db, IOptionsMonitor<TicketEmailOptions> options)
 {
-    public async Task<int> QueueAsync(Ticket ticket)
+    public async Task<int> QueueAsync(Ticket ticket, TicketEmailKind kind = TicketEmailKind.Created)
     {
         if (!options.CurrentValue.Enabled || !ticket.ProjectId.HasValue) return 0;
         var targetLevel = ticket.SupportLevel;
@@ -19,8 +19,9 @@ public class TicketCreatedEmails(HelpDeskDbContext db, IOptionsMonitor<TicketEma
         var queued = 0;
         foreach (var recipient in recipients.DistinctBy(r => r.Email.Trim(), StringComparer.OrdinalIgnoreCase)) {
             if (!MailAddress.TryCreate(recipient.Email.Trim(), out var address)) continue;
-            if (ticket.Id > 0 && await db.TicketEmailNotifications.AnyAsync(n => n.TicketId == ticket.Id && n.StaffId == recipient.StaffId && n.Kind == TicketEmailKind.Created)) continue;
+            if (ticket.Id > 0 && await db.TicketEmailNotifications.AnyAsync(n => n.TicketId == ticket.Id && n.StaffId == recipient.StaffId && n.Kind == kind && n.TargetLevel == targetLevel)) continue;
             db.TicketEmailNotifications.Add(new TicketEmailNotification {
+                Kind = kind, AlertDueAt = kind == TicketEmailKind.AutoEscalated ? DateTime.UtcNow : DateTime.MinValue,
                 TargetLevel = targetLevel, Ticket = ticket, StaffId = recipient.StaffId, CompanyId = ticket.ClientId,
                 ProjectId = ticket.ProjectId.Value, RecipientEmail = address.Address
             });

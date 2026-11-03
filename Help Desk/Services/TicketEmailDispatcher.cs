@@ -47,9 +47,14 @@ public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketE
                     ticket.Status != TicketStatus.Resolved && ticket.Status != TicketStatus.Closed &&
                     TicketTiming.DueAt(ticket) == item.AlertDueAt && item.AlertDueAt <= DateTime.UtcNow;
             }
+            if (eligible && item.Kind == TicketEmailKind.AutoEscalated) {
+                var ticket = item.Ticket;
+                eligible = ticket is not null && ticket.SupportLevel == item.TargetLevel &&
+                    ticket.Status != TicketStatus.Resolved && ticket.Status != TicketStatus.Closed;
+            }
             if (!eligible) {
                 item.Status = TicketEmailStatus.Skipped;
-                item.LastError = "Ticket or project access changed; email was not sent.";
+                item.LastError = "Ticket or customer access changed; email was not sent.";
                 item.LeaseUntil = null;
                 await db.SaveChangesAsync(cancellationToken);
                 continue;
@@ -104,21 +109,21 @@ public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketE
     private static MailMessage Compose(TicketEmailNotification notification, string from, TicketEmailOptions settings)
     {
         var ticket = notification.Ticket!;
-        var company = ticket.Client?.Name ?? "Company";
-        var project = ticket.Project?.Name ?? "Project";
+        var customer = ticket.Client?.Name ?? "Customer";
         var overdue = notification.Kind == TicketEmailKind.TatOverdue;
-        var heading = overdue ? "TAT deadline missed — your assigned ticket needs attention." : "A ticket requires attention from your project support team.";
+        var escalated = notification.Kind == TicketEmailKind.AutoEscalated;
+        var heading = overdue ? "TAT deadline missed — your assigned ticket needs attention." : escalated ? $"An urgent ticket was escalated to {ticket.SupportLevel} because the previous team did not respond in time." : "A ticket requires attention from your assigned agent team.";
         var deadline = TicketTiming.DueAt(ticket);
-        var subject = (overdue ? "[TAT OVERDUE] " : "") + $"[Ticket #{ticket.Id:D4}] {company} / {project}: {ticket.Title}".Replace('\r', ' ').Replace('\n', ' ');
+        var subject = (overdue ? "[TAT OVERDUE] " : escalated ? $"[URGENT ESCALATED TO {ticket.SupportLevel}] " : "") + $"[Ticket #{ticket.Id:D4}] {customer}: {ticket.Title}".Replace('\r', ' ').Replace('\n', ' ');
         string? link = null;
         if (Uri.TryCreate(settings.PublicBaseUrl, UriKind.Absolute, out var baseUri) &&
             (baseUri.Scheme == "https" || baseUri.Scheme == "http") && string.IsNullOrEmpty(baseUri.UserInfo) && string.IsNullOrEmpty(baseUri.Query) && string.IsNullOrEmpty(baseUri.Fragment))
             link = settings.PublicBaseUrl.TrimEnd('/') + "/Tickets/Details/" + ticket.Id;
-        var text = $"{heading}\nResolution deadline (UTC): {deadline:dd MMM yyyy, HH:mm}\n\nTicket: #{ticket.Id:D4}\nCompany: {company}\nProject: {project}\nTitle: {ticket.Title}\nPriority: {ticket.Priority}\nSupport level: {ticket.SupportLevel}\nStatus: {ticket.Status}\nRequester: {ticket.Requester?.Name} ({ticket.Requester?.Email})\nCreated (UTC): {ticket.CreatedAt:dd MMM yyyy, HH:mm}\n\nDescription:\n{ticket.Description}\n\n" +
+        var text = $"{heading}\nResolution deadline (UTC): {deadline:dd MMM yyyy, HH:mm}\n\nTicket: #{ticket.Id:D4}\nCustomer: {customer}\nTitle: {ticket.Title}\nPriority: {ticket.Priority}\nSupport level: {ticket.SupportLevel}\nStatus: {ticket.Status}\nRequester: {ticket.Requester?.Name} ({ticket.Requester?.Email})\nCreated (UTC): {ticket.CreatedAt:dd MMM yyyy, HH:mm}\n\nDescription:\n{ticket.Description}\n\n" +
             (link is null ? "Open AITS Helpdesk and search for this ticket number." : "View ticket: " + link + "\nSign in with your AITS account to view the ticket and any photo.");
         static string H(string? value) => HtmlEncoder.Default.Encode(value ?? "");
         var color = ticket.Priority switch { TicketPriority.Urgent => "#ae213d", TicketPriority.High => "#9a4c00", TicketPriority.Low => "#245ca7", _ => "#725b00" };
-        var html = $"<div style='font-family:Arial,sans-serif;color:#222a40;max-width:640px;margin:auto'><h2 style='color:#6255d9'>AITS Helpdesk · Ticket #{ticket.Id:D4}</h2><p>{H(heading)}</p><p><strong>Resolution deadline (UTC): {deadline:dd MMM yyyy, HH:mm}</strong></p><h3>{H(ticket.Title)}</h3><table cellpadding='8' style='border-collapse:collapse;background:#f5f6fa;width:100%'><tr><td>Company</td><td>{H(company)}</td></tr><tr><td>Project</td><td>{H(project)}</td></tr><tr><td>Priority</td><td style='color:{color};font-weight:bold'>{ticket.Priority}</td></tr><tr><td>Support level</td><td>{ticket.SupportLevel}</td></tr><tr><td>Status</td><td>{ticket.Status}</td></tr><tr><td>Requester</td><td>{H(ticket.Requester?.Name)} · {H(ticket.Requester?.Email)}</td></tr><tr><td>Created (UTC)</td><td>{ticket.CreatedAt:dd MMM yyyy, HH:mm}</td></tr></table><h4>Description</h4><p style='white-space:pre-wrap'>{H(ticket.Description)}</p>" +
+        var html = $"<div style='font-family:Arial,sans-serif;color:#222a40;max-width:640px;margin:auto'><h2 style='color:#6255d9'>AITS Helpdesk · Ticket #{ticket.Id:D4}</h2><p>{H(heading)}</p><p><strong>Resolution deadline (UTC): {deadline:dd MMM yyyy, HH:mm}</strong></p><h3>{H(ticket.Title)}</h3><table cellpadding='8' style='border-collapse:collapse;background:#f5f6fa;width:100%'><tr><td>Customer</td><td>{H(customer)}</td></tr><tr><td>Priority</td><td style='color:{color};font-weight:bold'>{ticket.Priority}</td></tr><tr><td>Support level</td><td>{ticket.SupportLevel}</td></tr><tr><td>Status</td><td>{ticket.Status}</td></tr><tr><td>Requester</td><td>{H(ticket.Requester?.Name)} · {H(ticket.Requester?.Email)}</td></tr><tr><td>Created (UTC)</td><td>{ticket.CreatedAt:dd MMM yyyy, HH:mm}</td></tr></table><h4>Description</h4><p style='white-space:pre-wrap'>{H(ticket.Description)}</p>" +
             (link is null ? "<p>Open AITS Helpdesk and search for this ticket number.</p>" : $"<p><a href='{H(link)}' style='color:#6255d9'>Open ticket →</a></p><small>Sign in with your AITS account to view the ticket and any photo.</small>") + "</div>";
         var mail = new MailMessage { From = new MailAddress(from, settings.FromName), Subject = subject, SubjectEncoding = Encoding.UTF8, Body = text, BodyEncoding = Encoding.UTF8 };
         mail.To.Add(notification.RecipientEmail);
@@ -127,4 +132,3 @@ public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketE
         return mail;
     }
 }
-

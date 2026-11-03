@@ -12,6 +12,8 @@ public class EmailSettingsStore(IWebHostEnvironment environment, IConfiguration 
             var email = root["Email"] as JsonObject ?? new JsonObject();
             root["Email"] = email;
             email["Enabled"] = model.Enabled; email["Host"] = model.Host; email["Port"] = model.Port;
+            email["IncomingEnabled"] = model.IncomingEnabled; email["IncomingHost"] = model.IncomingHost;
+            email["IncomingPort"] = model.IncomingPort; email["SupportAddress"] = model.SupportAddress ?? "";
             email["UserName"] = model.UserName; email["FromAddress"] = model.FromAddress;
             email["FromName"] = model.FromName; email["PublicBaseUrl"] = model.PublicBaseUrl ?? "";
             // Passwords are protected separately; never serialize a submitted password into JSON.

@@ -55,6 +55,11 @@ namespace Help_Desk.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<string>("EmailDomains")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -272,6 +277,12 @@ namespace Help_Desk.Migrations
                     b.Property<int>("HighHours")
                         .HasColumnType("int");
 
+                    b.Property<int>("L1ResponseHours")
+                        .HasColumnType("int");
+
+                    b.Property<int>("L2ResponseHours")
+                        .HasColumnType("int");
+
                     b.Property<int>("LowHours")
                         .HasColumnType("int");
 
@@ -285,7 +296,7 @@ namespace Help_Desk.Migrations
 
                     b.ToTable("TatPolicies", null, t =>
                         {
-                            t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760");
+                            t.HasCheckConstraint("CK_TatPolicy_Values", "Id = 1 AND LowHours BETWEEN 1 AND 8760 AND MediumHours BETWEEN 1 AND 8760 AND HighHours BETWEEN 1 AND 8760 AND UrgentHours BETWEEN 1 AND 8760 AND L1ResponseHours BETWEEN 1 AND 8760 AND L2ResponseHours BETWEEN 1 AND 8760");
                         });
                 });
 
@@ -333,6 +344,10 @@ namespace Help_Desk.Migrations
                     b.Property<int>("Severity")
                         .HasColumnType("int");
 
+                    b.Property<string>("SourceEmailMessageId")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
                     b.Property<int>("Status")
                         .IsConcurrencyToken()
                         .HasColumnType("int");
@@ -340,6 +355,9 @@ namespace Help_Desk.Migrations
                     b.Property<int>("SupportLevel")
                         .IsConcurrencyToken()
                         .HasColumnType("int");
+
+                    b.Property<DateTime>("SupportLevelStartedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -357,6 +375,10 @@ namespace Help_Desk.Migrations
                     b.HasIndex("AssigneeId");
 
                     b.HasIndex("RequesterId");
+
+                    b.HasIndex("SourceEmailMessageId")
+                        .IsUnique()
+                        .HasFilter("[SourceEmailMessageId] IS NOT NULL");
 
                     b.HasIndex("ClientId", "ProjectId");
 
@@ -403,6 +425,41 @@ namespace Help_Desk.Migrations
                     b.ToTable("TicketActivities");
                 });
 
+            modelBuilder.Entity("Help_Desk.Models.TicketAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("nvarchar(160)");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int>("TicketId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("TicketAttachments");
+                });
+
             modelBuilder.Entity("Help_Desk.Models.TicketComment", b =>
                 {
                     b.Property<int>("Id")
@@ -427,10 +484,18 @@ namespace Help_Desk.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("SourceEmailMessageId")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
                     b.Property<int>("TicketId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SourceEmailMessageId")
+                        .IsUnique()
+                        .HasFilter("[SourceEmailMessageId] IS NOT NULL");
 
                     b.HasIndex("TicketId");
 
@@ -729,6 +794,17 @@ namespace Help_Desk.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("Help_Desk.Models.TicketAttachment", b =>
+                {
+                    b.HasOne("Help_Desk.Models.Ticket", "Ticket")
+                        .WithMany("Attachments")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("Help_Desk.Models.TicketComment", b =>
                 {
                     b.HasOne("Help_Desk.Models.Ticket", "Ticket")
@@ -810,6 +886,8 @@ namespace Help_Desk.Migrations
 
             modelBuilder.Entity("Help_Desk.Models.Ticket", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("Comments");
                 });
 #pragma warning restore 612, 618

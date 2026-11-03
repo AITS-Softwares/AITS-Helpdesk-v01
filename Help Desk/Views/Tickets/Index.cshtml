@@ -1,16 +1,1023 @@
 @model TicketListViewModel
-@{ ViewData["Title"] = "Tickets"; }
-<div class="page-heading"><div><p class="eyebrow">SUPPORT QUEUE</p><h1>Tickets <span class="count">@Model.Tickets.Count</span></h1><p class="muted">@(User.IsInRole("AitsUser") ? "Showing tickets for your assigned company projects." : "Every request has a place. Every issue has a next step.")</p></div>@if (!User.IsInRole("AitsUser")) { <a class="button" asp-action="Create">+ New ticket</a> }</div>
-<section class="panel"><form method="get" class="filters"><input asp-for="Search" placeholder="Search by title, description or ticket ID" aria-label="Search tickets" /><select asp-for="Status" asp-items="Html.GetEnumSelectList<TicketStatus>()"><option value="">All statuses</option></select><select asp-for="Priority" class="priority-select" asp-items="Html.GetEnumSelectList<TicketPriority>()"><option value="">All priorities</option></select><select name="scope" id="scope" aria-label="Company or project"><option value="">All companies / projects</option>@foreach (var company in Model.Clients) {
-<optgroup label="@company.Name"><option value="company:@company.Id" selected="@((string?)ViewBag.Scope == $"company:{company.Id}")">@company.Name / All projects</option>
-@foreach (var project in Model.Projects.Where(p => p.ClientId == company.Id)) { <option value="project:@project.Id" selected="@((string?)ViewBag.Scope == $"project:{project.Id}")">@company.Name / @project.Name</option> }</optgroup>
-}</select><button class="button" type="submit">Filter</button><a asp-action="Index">Reset</a></form><div class="table-scroll"><table><thead><tr><th>Ticket</th><th>Company</th><th>Project</th><th>Status</th><th>Priority</th><th>Level</th><th>Assigned to</th><th>Resolution TAT</th><th>Updated (UTC)</th></tr></thead><tbody>@foreach (var ticket in Model.Tickets) { <tr><td><a class="table-ticket" asp-action="Details" asp-route-id="@ticket.Id"><small>#@ticket.Id.ToString("D4")</small><strong>@ticket.Title</strong></a></td><td>@Model.Clients.Find(c => c.Id == ticket.ClientId)?.Name</td><td>@(ticket.Project?.Name ?? "No project")</td><td><span class="badge @ticket.Status">@ticket.Status</span></td><td><span class="priority @ticket.Priority">● @ticket.Priority</span></td><td>@ticket.SupportLevel</td><td>@(Model.Users.Find(u => u.Id == ticket.AssigneeId)?.Name ?? "Unassigned")</td><td><partial name="_TatDeadline" model="ticket" /></td><td class="muted">@ticket.UpdatedAt.ToString("dd MMM yyyy, HH:mm")</td></tr> }</tbody></table></div>@if (!Model.Tickets.Any()) { <div class="empty">No tickets match your filters.</div> }</section>
-@section Scripts {
-<script>
-    const priorityFilter = document.getElementById('Priority');
-    function updatePriorityColor() { priorityFilter.dataset.priority = priorityFilter.value; }
-    priorityFilter.addEventListener('change', updatePriorityColor);
-    updatePriorityColor();
-</script>
+@{
+    ViewData["Title"] = "Tickets";
+    var statusCounts = Model.Tickets.GroupBy(t => t.Status).OrderByDescending(g => g.Count()).ToList();
 }
 
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap" />
+
+<style>
+    .tk-page {
+        --ink: #14263a;
+        --teal: #0f7b8a;
+        --teal-dark: #0b5f6b;
+        --tint: #e4f1f0;
+        --signal: #f2b544;
+        --surface: #ffffff;
+        --soft: #f5f8fa;
+        --text: #1b2733;
+        --muted: #5b6b7a;
+        --line: #d5dde4;
+        --danger: #b3261e;
+        font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        max-width: 84rem;
+        margin: 0 auto;
+        padding: clamp(0.75rem, 3vw, 2rem);
+    }
+
+        .tk-page *,
+        .tk-page *::before,
+        .tk-page *::after {
+            box-sizing: border-box;
+        }
+
+    .tk-muted {
+        color: var(--muted);
+    }
+
+    /* ---------- Hero band ---------- */
+    .tk-hero {
+        background: var(--ink);
+        color: #fff;
+        border-radius: 1.25rem;
+        padding: clamp(1.25rem, 4vw, 2rem);
+        margin-bottom: 1.25rem;
+        box-shadow: 0 12px 32px rgba(20, 38, 58, 0.15);
+    }
+
+    .tk-hero-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .tk-hero h1 {
+        font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+        font-size: clamp(1.6rem, 4.5vw, 2.4rem);
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        margin: 0 0 0.4rem;
+    }
+
+    .tk-hero p {
+        margin: 0;
+        color: #c9d6e2;
+        line-height: 1.5;
+        max-width: 46rem;
+    }
+
+    .tk-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: 1.25rem;
+    }
+
+    .tk-stat {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.55rem 0.95rem;
+        border-radius: 0.8rem;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        text-decoration: none;
+        transition: background 0.15s;
+    }
+
+    a.tk-stat:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .tk-stat strong {
+        font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+        font-size: 1.35rem;
+        line-height: 1;
+    }
+
+    .tk-stat span {
+        font-size: 0.85rem;
+        color: #c9d6e2;
+    }
+
+    .tk-stat.is-total {
+        background: var(--signal);
+    }
+
+        .tk-stat.is-total strong,
+        .tk-stat.is-total span {
+            color: var(--ink);
+        }
+
+    /* ---------- Buttons ---------- */
+    .tk-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.92rem;
+        text-decoration: none;
+        color: #fff;
+        background: var(--teal);
+        border: 1.5px solid var(--teal);
+        border-radius: 0.6rem;
+        min-height: 2.6rem;
+        padding: 0.5rem 1.1rem;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+        .tk-btn:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: #fff;
+        }
+
+        .tk-btn.is-signal {
+            background: var(--signal);
+            border-color: var(--signal);
+            color: var(--ink);
+        }
+
+            .tk-btn.is-signal:hover {
+                background: #f6c566;
+                border-color: #f6c566;
+                color: var(--ink);
+            }
+
+        .tk-btn:focus-visible,
+        .tk-reset:focus-visible,
+        .tk-stat:focus-visible,
+        .tk-view button:focus-visible {
+            outline: 3px solid var(--signal);
+            outline-offset: 2px;
+        }
+
+    /* ---------- Filter bar ---------- */
+    .tk-bar {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: clamp(0.85rem, 2.5vw, 1.25rem);
+        margin-bottom: 1.25rem;
+        box-shadow: 0 1px 2px rgba(20, 38, 58, 0.04), 0 8px 24px rgba(20, 38, 58, 0.06);
+    }
+
+    .tk-filters {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+    }
+
+    .tk-search {
+        position: relative;
+    }
+
+        .tk-search svg {
+            position: absolute;
+            left: 0.85rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1.1rem;
+            height: 1.1rem;
+            fill: none;
+            stroke: var(--muted);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            pointer-events: none;
+        }
+
+    .tk-filters input,
+    .tk-filters select {
+        width: 100%;
+        font: inherit;
+        font-size: 0.92rem;
+        color: var(--text);
+        background-color: #fff;
+        border: 1.5px solid var(--line);
+        border-radius: 0.6rem;
+        min-height: 2.7rem;
+        padding: 0.4rem 0.85rem;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .tk-search input {
+        padding-left: 2.6rem;
+    }
+
+    .tk-filters select {
+        appearance: none;
+        -webkit-appearance: none;
+        padding-right: 2.3rem;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6b7a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.7rem center;
+        background-size: 1rem;
+    }
+
+        .tk-filters input:hover,
+        .tk-filters select:hover {
+            border-color: #b4c1cc;
+        }
+
+        .tk-filters input:focus-visible,
+        .tk-filters select:focus-visible {
+            outline: none;
+            border-color: var(--teal);
+            box-shadow: 0 0 0 3px rgba(15, 123, 138, 0.22);
+        }
+
+        .tk-filters select.priority-select[data-priority="Low"] {
+            border-left: 5px solid #3c8f5a;
+        }
+
+        .tk-filters select.priority-select[data-priority="Medium"] {
+            border-left: 5px solid #d9a200;
+        }
+
+        .tk-filters select.priority-select[data-priority="High"] {
+            border-left: 5px solid #e0702b;
+        }
+
+        .tk-filters select.priority-select[data-priority="Critical"],
+        .tk-filters select.priority-select[data-priority="Urgent"] {
+            border-left: 5px solid var(--danger);
+        }
+
+    .tk-filter-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .tk-reset {
+        color: var(--teal-dark);
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-underline-offset: 3px;
+    }
+
+    /* ---------- Results header + view toggle ---------- */
+    .tk-results-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.9rem;
+    }
+
+        .tk-results-head h2 {
+            margin: 0;
+            font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+            font-size: 1.15rem;
+            color: var(--ink);
+        }
+
+    .tk-view {
+        display: inline-flex;
+        gap: 0.2rem;
+        padding: 0.2rem;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 0.7rem;
+    }
+
+        .tk-view button {
+            font: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            background: transparent;
+            border: 0;
+            border-radius: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            cursor: pointer;
+        }
+
+            .tk-view button[aria-pressed="true"] {
+                background: var(--teal);
+                color: #fff;
+            }
+
+    /* ---------- Ticket cards ---------- */
+    .tk-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+        gap: 1rem;
+    }
+
+    .tk-card {
+        --pc: var(--muted);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: 1.1rem 1.1rem 0.9rem;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(20, 38, 58, 0.04);
+        transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
+    }
+
+        .tk-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 4px;
+            background: var(--pc);
+        }
+
+        .tk-card:hover {
+            border-color: #b4c1cc;
+            box-shadow: 0 10px 28px rgba(20, 38, 58, 0.1);
+        }
+
+        .tk-card:focus-within {
+            border-color: var(--teal);
+            box-shadow: 0 0 0 3px rgba(15, 123, 138, 0.22);
+        }
+
+    .tk-c-Low {
+        --pc: #3c8f5a;
+    }
+
+    .tk-c-Medium {
+        --pc: #d9a200;
+    }
+
+    .tk-c-High {
+        --pc: #e0702b;
+    }
+
+    .tk-c-Critical,
+    .tk-c-Urgent {
+        --pc: var(--danger);
+    }
+
+    .tk-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+    }
+
+    .tk-id {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--teal-dark);
+        letter-spacing: 0.02em;
+    }
+
+    .tk-card-title {
+        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.3;
+        font-weight: 600;
+    }
+
+    .tk-card-link {
+        color: var(--ink);
+        text-decoration: none;
+        overflow-wrap: anywhere;
+    }
+
+        /* the whole card is clickable through the title link */
+        .tk-card-link::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+        }
+
+        .tk-card-link:focus-visible {
+            outline: none;
+        }
+
+    .tk-card-customer {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+    }
+
+    .tk-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.9rem;
+    }
+
+    .tk-priority {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-weight: 600;
+        font-size: 0.88rem;
+        white-space: nowrap;
+    }
+
+        .tk-priority::before {
+            content: "";
+            width: 0.6rem;
+            height: 0.6rem;
+            border-radius: 50%;
+            background: var(--pc);
+        }
+
+    .tk-level {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 0.4rem;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--ink);
+    }
+
+    .tk-tat {
+        margin-top: 0.1rem;
+        padding: 0.6rem 0.75rem;
+        background: var(--soft);
+        border-radius: 0.6rem;
+        font-size: 0.88rem;
+    }
+
+    .tk-tat-label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--muted);
+        margin-bottom: 0.15rem;
+    }
+
+    .tk-card-foot {
+        margin-top: auto;
+        padding-top: 0.7rem;
+        border-top: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .tk-agent {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    .tk-avatar {
+        flex: none;
+        width: 1.9rem;
+        height: 1.9rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--tint);
+        color: var(--teal-dark);
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+
+    .tk-assignment {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #fff;
+        padding: 0.2rem;
+        border-radius: 0.45rem;
+        border: 1px solid var(--line);
+    }
+
+        .tk-assignment select {
+            border: 0;
+            background: transparent;
+            font: inherit;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text);
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+            outline: none;
+            max-width: 8.5rem;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .tk-assignment button {
+            border: 0;
+            border-radius: 0.35rem;
+            background: var(--tint);
+            color: var(--teal-dark);
+            font: inherit;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 0.25rem 0.6rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+            .tk-assignment button:hover {
+                background: #cce6e3;
+            }
+
+    .tk-avatar.is-none {
+        background: var(--soft);
+        color: var(--muted);
+        border: 1px dashed var(--line);
+    }
+
+    .tk-date {
+        font-size: 0.8rem;
+        color: var(--muted);
+        white-space: nowrap;
+    }
+
+    /* status badge */
+    .tk-badge {
+        display: inline-block;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        white-space: nowrap;
+        background: #eceff2;
+        color: var(--muted);
+    }
+
+    .tk-s-New {
+        background: #e3effd;
+        color: #1f56a5;
+    }
+
+    .tk-s-Open {
+        background: #e3effd;
+        color: #1f56a5;
+    }
+
+    .tk-s-Assigned {
+        background: #ece8fb;
+        color: #51389a;
+    }
+
+    .tk-s-InProgress {
+        background: #fdf1d6;
+        color: #8a5a00;
+    }
+
+    .tk-s-Pending {
+        background: #fdf1d6;
+        color: #8a5a00;
+    }
+
+    .tk-s-OnHold {
+        background: #eceff2;
+        color: var(--muted);
+    }
+
+    .tk-s-Escalated {
+        background: #fdecea;
+        color: var(--danger);
+    }
+
+    .tk-s-Resolved {
+        background: #e1f4e8;
+        color: #1d6b3a;
+    }
+
+    .tk-s-Closed {
+        background: #eceff2;
+        color: var(--muted);
+    }
+
+    .tk-empty {
+        margin: 0;
+        padding: 2rem 1rem;
+        text-align: center;
+        color: var(--muted);
+        background: var(--surface);
+        border: 1px dashed var(--line);
+        border-radius: 1rem;
+    }
+
+    /* ---------- List view (compact operational rows) ---------- */
+    .tk-grid.is-list {
+        grid-template-columns: 1fr;
+        gap: 0.55rem;
+    }
+
+    .tk-list-head {
+        display: none;
+    }
+
+    @@media (min-width: 64rem) {
+        .tk-list-head {
+            display: grid;
+            grid-template-columns: 5.5rem minmax(12rem, 2fr) minmax(9rem, 1.2fr) minmax(8rem, .9fr) minmax(16rem, 1.55fr) minmax(8rem, .8fr);
+            gap: 0.5rem 1.25rem;
+            padding: 0.6rem 1.25rem 0.6rem 1.4rem;
+            margin-bottom: 0.15rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .tk-grid.is-list .tk-card {
+            display: grid;
+            grid-template-columns: 5.5rem minmax(12rem, 2fr) minmax(9rem, 1.2fr) minmax(8rem, .9fr) minmax(16rem, 1.55fr) minmax(8rem, .8fr);
+            align-items: center;
+            gap: 0.5rem 1.25rem;
+            min-height: 4.6rem;
+            padding: 0.7rem 1.25rem 0.7rem 1.4rem;
+            border-radius: 0.75rem;
+        }
+
+            .tk-grid.is-list .tk-card::before {
+                inset: 0 auto 0 0;
+                width: 5px;
+                height: auto;
+                border-radius: 0.75rem 0 0 0.75rem;
+            }
+
+        .tk-grid.is-list .tk-card-top {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+
+        .tk-grid.is-list .tk-card-foot {
+            display: contents;
+        }
+
+        .tk-grid.is-list .tk-tat {
+            display: none !important;
+        }
+
+        .tk-grid.is-list .tk-card-title {
+            font-size: 0.95rem;
+            line-height: 1.25;
+            margin: 0;
+        }
+
+        .tk-grid.is-list .tk-card-customer {
+            font-size: 0.82rem;
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .tk-grid.is-list .tk-card-meta {
+            gap: 0.35rem;
+            flex-wrap: nowrap;
+        }
+
+        .tk-grid.is-list .tk-priority {
+            font-size: 0.8rem;
+        }
+
+        .tk-grid.is-list .tk-level {
+            font-size: 0.72rem;
+            padding: 0.1rem 0.4rem;
+        }
+
+        .tk-grid.is-list .tk-agent {
+            gap: 0.45rem;
+            padding: 0.3rem 0.5rem;
+            border: 1px solid var(--line);
+            border-radius: 0.6rem;
+            background: var(--soft);
+            min-width: 0;
+            flex-wrap: nowrap;
+            overflow: hidden;
+        }
+
+        .tk-grid.is-list .tk-avatar {
+            width: 1.6rem;
+            height: 1.6rem;
+            font-size: 0.7rem;
+        }
+        /* Fix duplicate text by strictly controlling the name span */
+        .tk-grid.is-list .tk-agent > span:not(.tk-avatar) {
+            font-size: 0.8rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex-shrink: 1;
+        }
+
+        .tk-grid.is-list .tk-assignment {
+            margin-left: auto;
+            flex: none;
+            padding: 0.15rem;
+            border-color: transparent;
+            background: transparent;
+        }
+
+            .tk-grid.is-list .tk-assignment:hover {
+                border-color: var(--line);
+                background: #fff;
+            }
+
+        .tk-grid.is-list .tk-date {
+            font-size: 0.74rem;
+            text-align: right;
+            white-space: nowrap;
+            color: var(--muted);
+        }
+
+        .tk-grid.is-list .tk-card:hover {
+            border-color: var(--teal);
+            box-shadow: 0 4px 16px rgba(20, 38, 58, 0.1);
+            transform: translateY(-1px);
+        }
+    }
+
+    /* Stacked list view on tablet/mobile */
+    @@media (max-width: 63.99rem) {
+        .tk-grid.is-list .tk-card {
+            gap: 0.65rem;
+            padding: 0.9rem 1rem 0.8rem 1.15rem;
+        }
+
+            .tk-grid.is-list .tk-card::before {
+                inset: 0 0 auto 0;
+                width: auto;
+                height: 4px;
+                border-radius: 0.9rem 0.9rem 0 0;
+            }
+
+        .tk-grid.is-list .tk-card-foot {
+            padding-top: 0.65rem;
+            border-top: 1px solid var(--line);
+        }
+
+        .tk-grid.is-list .tk-agent {
+            width: 100%;
+            flex-wrap: wrap;
+            border: 0;
+            background: transparent;
+            padding: 0;
+        }
+
+        .tk-grid.is-list .tk-assignment {
+            margin-left: 0;
+            width: 100%;
+        }
+
+            .tk-grid.is-list .tk-assignment select {
+                flex: 1;
+                max-width: none;
+            }
+    }
+
+    /* ---------- Responsive ---------- */
+    @@media (min-width: 40rem) {
+        .tk-filters {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .tk-search,
+        .tk-filter-actions {
+            grid-column: 1 / -1;
+        }
+    }
+
+    @@media (min-width: 64rem) {
+        .tk-filters {
+            grid-template-columns: minmax(14rem, 2fr) repeat(3, minmax(9rem, 1fr)) auto;
+            align-items: center;
+        }
+
+        .tk-search,
+        .tk-filter-actions {
+            grid-column: auto;
+        }
+    }
+
+    @@media (max-width: 40rem) {
+        .tk-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .tk-hero-top .tk-btn,
+        .tk-filter-actions .tk-btn {
+            width: 100%;
+        }
+
+        .tk-filter-actions {
+            flex-direction: column;
+            align-items: stretch;
+            text-align: center;
+        }
+
+        .tk-view button.tk-view-list {
+            display: none;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .tk-page * {
+            transition: none !important;
+        }
+    }
+</style>
+
+<div class="tk-page">
+
+    <header class="tk-hero">
+        <div class="tk-hero-top">
+            <div>
+                <h1>Tickets</h1>
+                <p>@(User.IsInRole("AitsUser") ? "Showing tickets for your assigned customers." : "Every request has a place. Every issue has a next step.")</p>
+            </div>
+            @if (!User.IsInRole("AitsUser"))
+            {
+                <a class="tk-btn is-signal" asp-action="Create">+ New ticket</a>
+            }
+        </div>
+
+        <div class="tk-stats">
+            <div class="tk-stat is-total"><strong>@Model.Tickets.Count</strong><span>Total</span></div>
+            @foreach (var group in statusCounts)
+            {
+                <a class="tk-stat" asp-action="Index" asp-route-Status="@group.Key">
+                    <strong>@group.Count()</strong><span>@group.Key</span>
+                </a>
+            }
+        </div>
+    </header>
+
+    <section class="tk-bar" aria-label="Filter tickets">
+        <form method="get" class="tk-filters">
+            <div class="tk-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                <input asp-for="Search" placeholder="Search by title, description or ticket ID" aria-label="Search tickets" />
+            </div>
+
+            <select asp-for="Status" asp-items="Html.GetEnumSelectList<TicketStatus>()" aria-label="Status">
+                <option value="">All statuses</option>
+            </select>
+
+            <select asp-for="Priority" class="priority-select" asp-items="Html.GetEnumSelectList<TicketPriority>()" aria-label="Priority">
+                <option value="">All priorities</option>
+            </select>
+
+            <select asp-for="ClientId" aria-label="Customer">
+                <option value="">All customers</option>
+                @foreach (var customer in Model.Clients)
+                {
+                    <option value="@customer.Id">@customer.Name</option>
+                }
+            </select>
+
+            <div class="tk-filter-actions">
+                <button class="tk-btn" type="submit">Filter</button>
+                <a class="tk-reset" asp-action="Index">Reset</a>
+            </div>
+        </form>
+    </section>
+
+    <section aria-label="Ticket results">
+        <div class="tk-results-head">
+            <h2>@Model.Tickets.Count @(Model.Tickets.Count == 1 ? "ticket" : "tickets")</h2>
+            <div class="tk-view" role="group" aria-label="Change layout">
+                <button type="button" class="tk-view-cards" data-view="cards" aria-pressed="true">Cards</button>
+                <button type="button" class="tk-view-list" data-view="list" aria-pressed="false">List</button>
+            </div>
+        </div>
+
+        @if (Model.Tickets.Any())
+        {
+            <div class="tk-list-head" aria-hidden="true">
+                <span>Ticket</span>
+                <span>Subject</span>
+                <span>Customer</span>
+                <span>Priority / Level</span>
+                <span>Assignee</span>
+                <span>Updated</span>
+            </div>
+
+            <div class="tk-grid" id="ticketGrid">
+                @foreach (var ticket in Model.Tickets)
+                {
+                    var customerName = Model.Clients.Find(c => c.Id == ticket.ClientId)?.Name;
+                    var agentName = Model.Users.Find(u => u.Id == ticket.AssigneeId)?.Name;
+                    var agentInitial = string.IsNullOrWhiteSpace(agentName) ? "–" : agentName.Trim().Substring(0, 1).ToUpper();
+                    var eligibleAgents = ((IEnumerable<StaffProject>)ViewBag.StaffMemberships)
+                    .Where(m => m.ProjectId == ticket.ProjectId && m.SupportLevel == ticket.SupportLevel && m.Project?.ClientId == ticket.ClientId)
+                    .Select(m => Model.Users.FirstOrDefault(u => u.Id == m.StaffId))
+                    .OfType<AitsStaffUser>().Where(u => u.IsActive).OrderBy(u => u.Name).DistinctBy(u => u.Id).ToList();
+
+                    <article class="tk-card tk-c-@ticket.Priority">
+                        <div class="tk-card-top">
+                            <span class="tk-id">#@ticket.Id.ToString("D4")</span>
+                            <span class="tk-badge tk-s-@ticket.Status">@ticket.Status</span>
+                        </div>
+
+                        <h3 class="tk-card-title">
+                            <a class="tk-card-link" asp-action="Details" asp-route-id="@ticket.Id">@ticket.Title</a>
+                        </h3>
+
+                        <p class="tk-card-customer">@customerName</p>
+
+                        <div class="tk-card-meta">
+                            <span class="tk-priority">@ticket.Priority</span>
+                            <span class="tk-level">@ticket.SupportLevel</span>
+                        </div>
+
+                        <div class="tk-tat">
+                            <span class="tk-tat-label">Resolution TAT</span>
+                            <partial name="_TatDeadline" model="ticket" />
+                        </div>
+
+                        <div class="tk-card-foot">
+                            <div class="tk-agent">
+                                <span class="tk-avatar @(agentName is null ? "is-none" : "")" aria-hidden="true">@agentInitial</span>
+                                <span class="@(agentName is null ? "tk-muted" : "")">@(agentName ?? "Unassigned")</span>
+                                @if (User.IsInRole("Admin") && ticket.Status is not (TicketStatus.Resolved or TicketStatus.Closed))
+                                {
+                                    <form asp-action="Assign" method="post" class="tk-assignment" aria-label="Assign ticket #@ticket.Id.ToString("D4")">
+                                        <input type="hidden" name="id" value="@ticket.Id" />
+                                        <input type="hidden" name="search" value="@Model.Search" />
+                                        <input type="hidden" name="status" value="@Model.Status" />
+                                        <input type="hidden" name="priority" value="@Model.Priority" />
+                                        <input type="hidden" name="clientId" value="@Model.ClientId" />
+                                        <input type="hidden" name="projectId" value="@Model.ProjectId" />
+                                        <select name="assigneeId" aria-label="Select agent for ticket #@ticket.Id.ToString("D4")">
+                                            <option value="">Unassigned</option>
+                                            @foreach (var agent in eligibleAgents)
+                                            {
+                                                <option value="@agent.Id" selected="@(ticket.AssigneeId == agent.Id)">@agent.Name</option>
+                                            }
+                                        </select>
+                                        <button type="submit">Assign</button>
+                                    </form>
+                                }
+                            </div>
+                            <span class="tk-date">@ticket.UpdatedAt.ToString("dd MMM yyyy, HH:mm") UTC</span>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="tk-empty">No tickets match your filters.</p>
+        }
+    </section>
+
+</div>
+
+@section Scripts {
+    <script>
+        const priorityFilter = document.getElementById('Priority');
+        function updatePriorityColor() { priorityFilter.dataset.priority = priorityFilter.value; }
+        priorityFilter.addEventListener('change', updatePriorityColor);
+        updatePriorityColor();
+
+        (function () {
+          var grid = document.getElementById('ticketGrid');
+          var buttons = document.querySelectorAll('.tk-view button');
+          var listHead = document.querySelector('.tk-list-head');
+          if (!grid) { return; }
+
+          function setView(view) {
+            grid.classList.toggle('is-list', view === 'list');
+            if (listHead) { listHead.style.display = view === 'list' ? '' : 'none'; }
+            buttons.forEach(function (b) {
+              b.setAttribute('aria-pressed', String(b.dataset.view === view));
+            });
+            try { localStorage.setItem('ticketView', view); } catch (e) { }
+          }
+
+          buttons.forEach(function (b) {
+            b.addEventListener('click', function () { setView(b.dataset.view); });
+          });
+
+          var saved = null;
+          try { saved = localStorage.getItem('ticketView'); } catch (e) { }
+          if (saved === 'list') { setView('list'); }
+          else if (listHead) { listHead.style.display = 'none'; }
+        })();
+    </script>
+}

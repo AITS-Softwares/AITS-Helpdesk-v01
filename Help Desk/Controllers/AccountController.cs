@@ -74,7 +74,14 @@ public class AccountController(HelpDeskDbContext db, IPasswordHasher<DeskAccount
     public async Task<IActionResult> Signup(SignupViewModel model)
     {
         model.Email = model.Email?.Trim() ?? "";
-        if (!await db.Companies.AnyAsync(c => c.Id == model.ClientId)) ModelState.AddModelError("ClientId", "Select an existing company. Only an AITS admin can add companies.");
+        var signupCustomer = await db.Companies.SingleOrDefaultAsync(c => c.Id == model.ClientId);
+        if (signupCustomer is null) ModelState.AddModelError("ClientId", "Select an existing customer. Only an AITS admin can add customers.");
+        else {
+            var domain = model.Email.Contains('@') ? model.Email[(model.Email.LastIndexOf('@') + 1)..].Trim().ToLowerInvariant() : "";
+            var allowedAddressesOrDomains = signupCustomer.EmailDomains.Split(['\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(d => d.TrimStart('@').ToLowerInvariant()).ToHashSet();
+            if (allowedAddressesOrDomains.Count > 0 && !allowedAddressesOrDomains.Contains(domain) && !allowedAddressesOrDomains.Contains(model.Email.ToLowerInvariant()))
+                ModelState.AddModelError("Email", "Use an email address or domain approved for this customer.");
+        }
         if (await db.Accounts.AnyAsync(a => a.Email == model.Email) || await db.Users.AnyAsync(u => u.Email == model.Email))
             ModelState.AddModelError("Email", "This email is already registered or has a directory record. Sign in or contact your AITS admin to enable access.");
         if (ModelState.IsValid)
@@ -184,7 +191,7 @@ public class AccountController(HelpDeskDbContext db, IPasswordHasher<DeskAccount
             .Where(u => u.UserType == (clients ? UserType.ClientUser : UserType.AitsStaff) && (!clients || !clientId.HasValue || u.ClientId == clientId))
             .OrderBy(u => u.Name).ToListAsync();
         var memberships = await db.StaffProjects.AsNoTracking().Include(m => m.Project).ThenInclude(p => p!.Client).ToListAsync();
-        ViewBag.StaffProjects = memberships.GroupBy(m => m.StaffId).ToDictionary(g => g.Key, g => g.Select(m => m.Project!.Client!.Name + " / " + m.Project.Name).ToList());
+        ViewBag.StaffProjects = memberships.GroupBy(m => m.StaffId).ToDictionary(g => g.Key, g => g.Select(m => m.Project!.Client!.Name).Distinct().OrderBy(name => name).ToList());
 
         var requests = new List<PasswordResetRequestItem>();
         if (User.IsInRole("Admin")) {

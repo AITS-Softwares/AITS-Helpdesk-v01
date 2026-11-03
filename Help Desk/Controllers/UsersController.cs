@@ -24,12 +24,13 @@ public class UsersController(HelpDeskDbContext db) : Controller
         if (!staff && clientId.HasValue) users = users.Where(u => u.ClientId == clientId);
         if (staff) {
             var assignments = await db.StaffProjects.AsNoTracking().Include(m => m.Project).ThenInclude(p => p!.Client).ToListAsync();
-            ViewBag.StaffProjects = assignments.GroupBy(m => m.StaffId).ToDictionary(g => g.Key, g => g.OrderBy(m => m.Project!.Client!.Name).ThenBy(m => m.Project!.Name).Select(m => m.Project!.Client!.Name + " / " + m.Project.Name).ToList());
+            ViewBag.StaffProjects = assignments.GroupBy(m => m.StaffId).ToDictionary(g => g.Key, g => g.Select(m => m.Project!.Client!.Name).Distinct().OrderBy(name => name).ToList());
         }
         return View("Index", await users.OrderBy(u => u.Name).ToListAsync());
     }
     public async Task<IActionResult> Create(int? clientId, bool staff = false)
     {
+        if (!staff) return RedirectToAction("Index", "Clients");
         ViewData["StaffSection"] = staff;
         await LoadCompanies(); return View("Edit", new UserEditViewModel { ClientId = staff ? null : clientId, UserType = staff ? UserType.AitsStaff : UserType.ClientUser });
     }
@@ -43,6 +44,7 @@ public class UsersController(HelpDeskDbContext db) : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Save([Bind("Id,Name,Email,Department,UserType,ClientId")] UserEditViewModel user)
     {
+        if (user.Id == 0 && user.UserType != UserType.AitsStaff) return RedirectToAction("Index", "Clients");
         ViewData["StaffSection"] = user.UserType == UserType.AitsStaff;
         var existing = user.Id == 0 ? null : await db.Users.FindAsync(user.Id);
         if (user.Id != 0 && existing is null) return NotFound();
@@ -90,7 +92,7 @@ public class UsersController(HelpDeskDbContext db) : Controller
         return RedirectToAction(nameof(AitsStaff));
     }
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Projects(int id)
+    public async Task<IActionResult> AssignCustomers(int id)
     {
         ViewData["StaffSection"] = true;
         var staff = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id && u.UserType == UserType.AitsStaff);
@@ -98,27 +100,28 @@ public class UsersController(HelpDeskDbContext db) : Controller
         return View(new StaffProjectsViewModel {
             Staff = staff,
             Projects = await db.Projects.AsNoTracking().Include(p => p.Client).OrderBy(p => p.Client!.Name).ThenBy(p => p.Name).ToListAsync(),
-            SelectedProjectIds = await db.StaffProjects.Where(m => m.StaffId == id).Select(m => m.ProjectId).ToListAsync()
+            SelectedClientIds = await db.StaffProjects.Where(m => m.StaffId == id).Select(m => m.Project!.ClientId).Distinct().ToListAsync()
         });
     }
     [Authorize(Roles = "Admin"), HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Projects(int id, [Bind("SelectedProjectIds")] StaffProjectsViewModel model)
+    public async Task<IActionResult> AssignCustomers(int id, [Bind("SelectedClientIds")] StaffProjectsViewModel model)
     {
         ViewData["StaffSection"] = true;
         var staff = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == id && u.UserType == UserType.AitsStaff);
         if (staff is null) return NotFound();
-        var selected = model.SelectedProjectIds.Distinct().ToList();
+        var selectedCustomers = model.SelectedClientIds.Distinct().ToList();
         var projects = await db.Projects.AsNoTracking().Include(p => p.Client).OrderBy(p => p.Client!.Name).ThenBy(p => p.Name).ToListAsync();
-        if (selected.Any(projectId => !projects.Any(p => p.Id == projectId)))
-            ModelState.AddModelError("", "A selected project no longer exists. Reload and try again.");
+        if (selectedCustomers.Any(customerId => !projects.Any(p => p.ClientId == customerId)))
+            ModelState.AddModelError("", "A selected customer no longer exists. Reload and try again.");
         if (ModelState.IsValid) {
             var current = await db.StaffProjects.Where(m => m.StaffId == id).ToListAsync();
-            db.StaffProjects.RemoveRange(current.Where(m => !selected.Contains(m.ProjectId)));
-            db.StaffProjects.AddRange(selected.Where(projectId => !current.Any(m => m.ProjectId == projectId)).Select(projectId => new StaffProject { StaffId = id, ProjectId = projectId }));
+            var selectedProjectIds = projects.Where(p => selectedCustomers.Contains(p.ClientId)).Select(p => p.Id).ToHashSet();
+            db.StaffProjects.RemoveRange(current.Where(m => !selectedProjectIds.Contains(m.ProjectId)));
+            db.StaffProjects.AddRange(selectedProjectIds.Where(projectId => !current.Any(m => m.ProjectId == projectId)).Select(projectId => new StaffProject { StaffId = id, ProjectId = projectId }));
             try {
                 await db.SaveChangesAsync();
-                TempData["Message"] = "Staff project assignments saved. Ticket access updates immediately.";
-                return RedirectToAction(nameof(Projects), new { id });
+                TempData["Message"] = "Agent customer assignments saved. Ticket access updates immediately.";
+                return RedirectToAction(nameof(AssignCustomers), new { id });
             }
             catch (DbUpdateException) { ModelState.AddModelError("", "Assignments could not be saved. Reload and try again."); }
         }

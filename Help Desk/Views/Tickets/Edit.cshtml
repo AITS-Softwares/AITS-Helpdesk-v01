@@ -4,7 +4,7 @@
     ViewData["Title"] = Model.Id == 0 ? "New ticket" : "Edit ticket";
     var priorityTargets = await TatPolicyProvider.ReadAsync();
     var users = (List<DeskUser>)ViewBag.Users;
-    var companies = (List<Client>)ViewBag.Clients;
+    var customers = (List<Client>)ViewBag.Clients;
     var internalUser = User.IsInRole("Admin") || User.IsInRole("AitsUser");
 }
 <div class="page-heading"><div><a asp-action="Index">← Back to tickets</a><h1>@ViewData["Title"]</h1><p class="muted">Give your team the context they need to help.</p></div></div>
@@ -13,18 +13,15 @@
     <div asp-validation-summary="All" class="validation"></div>
     @if (internalUser && Model.Id == 0)
     {
-        <label asp-for="ClientId">Company</label>
-        <select asp-for="ClientId" id="ticketClient"><option value="">Select a company</option>@foreach (var company in companies) { <option value="@company.Id">@company.Name</option> }</select>
+        <label asp-for="ClientId">Customer</label>
+        <select asp-for="ClientId" id="ticketClient"><option value="">Select a customer</option>@foreach (var customer in customers) { <option value="@customer.Id">@customer.Name</option> }</select>
     }
     else
     {
-        <label for="accountCompany">Company</label>
-        <input id="accountCompany" value="@(companies.Find(c => c.Id == Model.ClientId)?.Name)" readonly aria-describedby="accountCompanyNote" />
-        <small id="accountCompanyNote" class="muted">@(internalUser ? "Company is fixed for this ticket." : "Automatically linked to your account.")</small>
+        <label for="accountCustomer">Customer</label>
+        <input id="accountCustomer" value="@(customers.Find(c => c.Id == Model.ClientId)?.Name)" readonly aria-describedby="accountCustomerNote" />
+        <small id="accountCustomerNote" class="muted">@(internalUser ? "Customer is fixed for this ticket." : "Automatically linked to your account.")</small>
     }
-    <label asp-for="ProjectId">Project</label>
-    <select asp-for="ProjectId" id="ticketProject"><option value="">Select a project</option>@foreach (var project in (List<CompanyProject>)ViewBag.Projects) { <option value="@project.Id" data-client="@project.ClientId">@project.Name</option> }</select>
-    <small id="projectNote" class="muted"></small>
     <label asp-for="Title"></label><input asp-for="Title" maxlength="160" placeholder="A short summary of the issue" />
     <label asp-for="Description"></label><textarea asp-for="Description" rows="7" maxlength="5000" placeholder="What happened? Include any useful details."></textarea>
     <section class="ticket-photo-upload">
@@ -101,38 +98,19 @@
             photoInput.addEventListener('change', updatePhotoPreview);
             document.getElementById('clearPhoto').addEventListener('click', () => { photoInput.value = ''; updatePhotoPreview(); });
             window.addEventListener('pagehide', () => { if (photoUrl) URL.revokeObjectURL(photoUrl); });
-            const company = document.getElementById('ticketClient') || { value: '@Model.ClientId', addEventListener: () => {} };
+            const customer = document.getElementById('ticketClient') || { value: '@Model.ClientId', addEventListener: () => {} };
             const requester = document.getElementById('RequesterId');
             function filterRequesters() {
                 if (!requester) return;
                 for (const option of requester.options) {
                     if (option.value) {
-                        option.hidden = option.dataset.client !== company.value;
+                        option.hidden = option.dataset.client !== customer.value;
                         option.disabled = option.hidden;
                     }
                 }
                 if (requester.selectedOptions[0]?.disabled) requester.value = '';
             }
-            company.addEventListener('change', filterRequesters);
+            customer.addEventListener('change', filterRequesters);
             filterRequesters();
-            const project = document.getElementById('ticketProject');
-            function filterProjects() {
-                const available = [];
-                for (const option of project.options) {
-                    if (!option.value) continue;
-                    option.hidden = option.dataset.client !== company.value;
-                    option.disabled = option.hidden;
-                    if (!option.hidden) available.push(option);
-                }
-                if (project.selectedOptions[0]?.disabled) project.value = '';
-                if (available.length === 1) project.value = available[0].value;
-                project.required = available.length > 0;
-                document.getElementById('projectNote').textContent = !company.value ? 'Select a company to see its projects.' : available.length === 0 ? 'No projects configured for this company.' : available.length === 1 ? 'Automatically selected for this company.' : 'Select a project for this company.';
-            }
-            company.addEventListener('change', filterProjects);
-            filterProjects();
         </script>
 }
-
-
-

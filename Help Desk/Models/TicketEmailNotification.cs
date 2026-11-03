@@ -4,7 +4,7 @@ namespace Help_Desk.Models;
 
 public enum TicketEmailStatus { Pending, Processing, Sent, Retry, Failed, Skipped }
 
-public enum TicketEmailKind { Created, TatOverdue }
+public enum TicketEmailKind { Created, TatOverdue, AutoEscalated }
 
 public class TicketEmailNotification
 {

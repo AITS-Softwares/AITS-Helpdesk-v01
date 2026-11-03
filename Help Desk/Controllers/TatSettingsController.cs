@@ -13,13 +13,14 @@ public class TatSettingsController(HelpDeskDbContext db, TicketTatPolicy policy)
     public async Task<IActionResult> Index() => View(await policy.ReadAsync());
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Index([Bind("LowHours,MediumHours,HighHours,UrgentHours")] TatPolicy model)
+    public async Task<IActionResult> Index([Bind("LowHours,MediumHours,HighHours,UrgentHours,L1ResponseHours,L2ResponseHours")] TatPolicy model)
     {
         if (!ModelState.IsValid) return View(model);
         var current = await db.TatPolicies.SingleOrDefaultAsync(p => p.Id == 1);
         if (current is null) { current = new TatPolicy(); db.TatPolicies.Add(current); }
         current.LowHours = model.LowHours; current.MediumHours = model.MediumHours;
         current.HighHours = model.HighHours; current.UrgentHours = model.UrgentHours;
+        current.L1ResponseHours = model.L1ResponseHours; current.L2ResponseHours = model.L2ResponseHours;
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateException) {
             ModelState.AddModelError("", "TAT settings could not be saved. Reload the page and try again.");

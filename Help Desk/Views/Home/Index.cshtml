@@ -1,15 +1,95 @@
 @model DeskData
-@{ ViewData["Title"] = "Overview"; var active = Model.Tickets.Count(t => t.Status == TicketStatus.Open || t.Status == TicketStatus.InProgress); }
-<div class="page-heading"><div><p class="eyebrow">YOUR SUPPORT, AT A GLANCE</p><h1>@(User.IsInRole("ClientUser") ? "Your support overview" : "AITS support overview")</h1><p class="muted">@(User.IsInRole("ClientUser") ? "Track your requests and get help from AITS." : User.IsInRole("AitsUser") ? $"Working across {Model.Projects.Select(p => p.ClientId).Distinct().Count()} assigned companies." : $"Supporting {Model.Clients.Count} client companies from one workspace.")</p></div>@if (!User.IsInRole("AitsUser")) { <a class="button" asp-controller="Tickets" asp-action="Create">+ New ticket</a> }</div>
-<div class="stats"><div class="stat"><span>Total tickets</span><strong>@Model.Tickets.Count</strong><small>Every request, in one place</small></div><div class="stat"><span>Active requests</span><strong>@active</strong><small>Open and in progress</small></div><div class="stat"><span>Resolved & closed</span><strong>@Model.Tickets.Count(t => t.Status == TicketStatus.Resolved || t.Status == TicketStatus.Closed)</strong><small>Moving work forward</small></div><div class="stat"><span>Urgent & active</span><strong>@Model.Tickets.Count(t => t.Priority == TicketPriority.Urgent && (t.Status == TicketStatus.Open || t.Status == TicketStatus.InProgress))</strong><small>Needs your attention</small></div></div>
-@if (User.IsInRole("AitsUser")) {
-<section class="panel assigned-work">
-    <div class="panel-heading"><div><p class="eyebrow">YOUR SCOPE</p><h2>Your assigned projects <span class="count">@Model.Projects.Count</span></h2></div><a asp-controller="Tickets" asp-action="Index">View your tickets →</a></div>
-    @if (Model.Projects.Any()) {
-        <div class="project-card-grid">@foreach (var project in Model.Projects) {
-            <a class="project-card" asp-controller="MyWork" asp-action="Project" asp-route-id="@project.Id"><span class="project-card-icon">↗</span><span class="muted">@project.Client?.Name</span><strong>@project.Name</strong><small>@Model.Tickets.Count(t => t.ProjectId == project.Id) tickets in your workspace</small></a>
-        }</div>
-    } else { <div class="empty"><strong>No projects assigned yet</strong><p>Your Admin can assign company projects under AITS staff → Assign projects. Tickets appear here as soon as projects are assigned.</p></div> }
-</section>
+@{
+    ViewData["Title"] = "Overview";
+    var active = Model.Tickets.Count(ticket => ticket.Status is TicketStatus.Open or TicketStatus.InProgress);
+    var resolved = Model.Tickets.Count(ticket => ticket.Status is TicketStatus.Resolved or TicketStatus.Closed);
+    var urgent = Model.Tickets.Count(ticket => ticket.Priority == TicketPriority.Urgent && ticket.Status is TicketStatus.Open or TicketStatus.InProgress);
 }
-<div class="overview-grid"><section class="panel"><div class="panel-heading"><div><h2>Recent tickets</h2><p class="muted">The latest activity across your workspace</p></div><a asp-controller="Tickets" asp-action="Index">View all →</a></div>@if (!Model.Tickets.Any()) { <div class="empty">No tickets yet. Create your first request to get started.</div> } else { @foreach (var ticket in Model.Tickets.OrderByDescending(t => t.UpdatedAt).Take(6)) { <a class="ticket-row" asp-controller="Tickets" asp-action="Details" asp-route-id="@ticket.Id"><span class="ticket-number">#@ticket.Id.ToString("D4")</span><span class="ticket-summary"><strong>@ticket.Title</strong><small>@(Model.Users.Find(u => u.Id == ticket.RequesterId)?.Name) · @ticket.UpdatedAt.ToString("dd MMM, HH:mm")</small></span><span class="badge @ticket.Status">@ticket.Status</span></a> } }</section><section class="panel"><div class="panel-heading"><h2>Ticket breakdown</h2></div><div class="breakdown">@foreach (var status in Enum.GetValues<TicketStatus>()) { var count = Model.Tickets.Count(t => t.Status == status); <div class="breakdown-label"><span>@status</span><strong>@count</strong></div><progress value="@count" max="@Math.Max(1, Model.Tickets.Count)"></progress> }<div class="team-note"><strong>@Model.Users.Count people, one team.</strong><p class="muted">Connect requests with the right person.</p>@if (User.IsInRole("Admin")) { <a asp-controller="Users" asp-action="ClientUsers">Manage people →</a> }</div></div></section></div>
+
+<div class="overview-page">
+    <div class="page-heading overview-heading">
+        <div>
+            <p class="eyebrow">YOUR SUPPORT, AT A GLANCE</p>
+            <h1>@(User.IsInRole("ClientUser") ? "Your support overview" : "AITS support overview")</h1>
+            <p class="muted">@(User.IsInRole("ClientUser") ? "Track your requests and get help from AITS." : User.IsInRole("AitsUser") ? $"Working across {Model.Projects.Select(project => project.ClientId).Distinct().Count()} assigned customers." : $"Supporting {Model.Clients.Count} customers from one workspace.")</p>
+        </div>
+        @if (!User.IsInRole("AitsUser"))
+        {
+            <a class="button" asp-controller="Tickets" asp-action="Create"><span aria-hidden="true">＋</span> New ticket</a>
+        }
+    </div>
+
+    <section class="stats dashboard-stats" aria-label="Ticket summary">
+        <article class="stat dashboard-stat is-violet">
+            <div class="dashboard-stat-top"><span>Total tickets</span><span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3.75h7l4 4v12.5H7a2 2 0 0 1-2-2v-12.5a2 2 0 0 1 2-2Z"/><path d="M14 4v4h4M9 13h6M9 16.5h6"/></svg></span></div>
+            <strong>@Model.Tickets.Count</strong><small>Every request in one place</small>
+        </article>
+        <article class="stat dashboard-stat is-teal">
+            <div class="dashboard-stat-top"><span>Active requests</span><span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/><path d="M12 7v5l3.5 2M16 3.5h4.5V8"/></svg></span></div>
+            <strong>@active</strong><small>Open and in progress</small>
+        </article>
+        <article class="stat dashboard-stat is-blue">
+            <div class="dashboard-stat-top"><span>Resolved &amp; closed</span><span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11.2V12a8 8 0 1 1-4.75-7.33"/><path d="m8.5 11.5 3 3L21 5"/></svg></span></div>
+            <strong>@resolved</strong><small>Requests completed</small>
+        </article>
+        <article class="stat dashboard-stat is-coral">
+            <div class="dashboard-stat-top"><span>Urgent &amp; active</span><span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5m0 3h.01"/></svg></span></div>
+            <strong>@urgent</strong><small>Needs your attention</small>
+        </article>
+    </section>
+
+    @if (User.IsInRole("AitsUser"))
+    {
+        var assignedCustomers = Model.Projects.Select(project => project.Client).Where(customer => customer is not null).DistinctBy(customer => customer!.Id).ToList();
+        <section class="panel assigned-work overview-assigned">
+            <div class="panel-heading"><div><p class="eyebrow">YOUR SCOPE</p><h2>Your assigned customers <span class="count">@assignedCustomers.Count</span></h2></div><a asp-controller="Tickets" asp-action="Index">View your tickets <span aria-hidden="true">→</span></a></div>
+            @if (assignedCustomers.Any())
+            {
+                <div class="project-card-grid">
+                    @foreach (var customer in assignedCustomers)
+                    {
+                        <a class="project-card overview-customer-card" asp-controller="Tickets" asp-action="Index" asp-route-clientId="@customer!.Id"><span class="muted">CUSTOMER</span><strong>@customer!.Name</strong><small>@Model.Tickets.Count(ticket => ticket.ClientId == customer.Id) tickets in your workspace</small></a>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty"><strong>No customers assigned yet</strong><p>Your administrator can assign customers to your agent account.</p></div>
+            }
+        </section>
+    }
+
+    <div class="overview-grid overview-dashboard">
+        <section class="panel overview-panel">
+            <div class="panel-heading"><div><h2>Recent tickets</h2><p class="muted">The latest activity across your workspace</p></div><a asp-controller="Tickets" asp-action="Index">View all <span aria-hidden="true">→</span></a></div>
+            @if (!Model.Tickets.Any())
+            {
+                <div class="empty">No tickets yet. Create your first request to get started.</div>
+            }
+            else
+            {
+                @foreach (var ticket in Model.Tickets.OrderByDescending(ticket => ticket.UpdatedAt).Take(6))
+                {
+                    <a class="ticket-row overview-ticket-row" asp-controller="Tickets" asp-action="Details" asp-route-id="@ticket.Id">
+                        <span class="ticket-number">#@ticket.Id.ToString("D4")</span>
+                        <span class="ticket-summary"><strong>@ticket.Title</strong><small>@(Model.Users.Find(user => user.Id == ticket.RequesterId)?.Name) · @ticket.UpdatedAt.ToString("dd MMM, HH:mm")</small></span>
+                        <span class="badge @ticket.Status">@ticket.Status</span>
+                    </a>
+                }
+            }
+        </section>
+
+        <section class="panel overview-panel overview-breakdown">
+            <div class="panel-heading"><div><h2>Ticket breakdown</h2><p class="muted">Requests by current status</p></div></div>
+            <div class="breakdown dashboard-breakdown">
+                @foreach (var status in Enum.GetValues<TicketStatus>())
+                {
+                    var count = Model.Tickets.Count(ticket => ticket.Status == status);
+                    <div class="breakdown-label"><span>@status</span><strong>@count</strong></div>
+                    <progress class="breakdown-progress breakdown-@status" value="@count" max="@Math.Max(1, Model.Tickets.Count)" aria-label="@status: @count tickets"></progress>
+                }
+                <div class="team-note"><strong>@Model.Users.Count people, one team.</strong><p class="muted">Connect requests with the right person.</p>@if (User.IsInRole("Admin")) { <a asp-controller="Users" asp-action="ClientUsers">Manage people <span aria-hidden="true">→</span></a> }</div>
+            </div>
+        </section>
+    </div>
+</div>

@@ -1,0 +1,7 @@
+@model StaffProjectsViewModel
+@{ ViewData["Title"] = "Assign customers"; var customers = Model.Projects.Select(p => p.Client!).DistinctBy(c => c.Id).OrderBy(c => c.Name).ToList(); }
+<div class="page-heading"><div><a asp-action="AitsStaff">Back to agents</a><h1>Assign customers</h1><p class="muted">@Model.Staff.Name · @Model.Staff.Email</p></div></div>
+<form asp-action="AssignCustomers" asp-route-id="@Model.Staff.Id" method="post" class="panel form-panel assignment-panel"><div asp-validation-summary="All" class="validation"></div><p>Select the customers this agent supports. The agent can see tickets and customer users across each selected customer.</p>
+@foreach (var customer in customers) { <label class="project-choice"><input type="checkbox" name="SelectedClientIds" value="@customer.Id" checked="@Model.SelectedClientIds.Contains(customer.Id)" /> @customer.Name</label> }
+@if (!customers.Any()) { <p class="muted">Add a customer first.</p> }
+<div class="form-actions"><button class="button" type="submit">Save assignments</button><a asp-action="AitsStaff">Back to agents</a></div></form>

@@ -1,11 +1,209 @@
 @model SetupAdminViewModel
-@{ ViewData["Title"] = "Add administrator"; }
-<div class="page-heading"><div><p class="eyebrow">SIGN-IN ACCOUNTS</p><h1>Add administrator</h1><p class="muted">Create an internal admin account. The user can sign in through AITS sign in.</p></div></div>
-<form asp-action="CreateAdmin" method="post" class="panel form-panel">
-    <div asp-validation-summary="All" class="validation" role="alert"></div>
-    <label asp-for="Name">Admin name</label><input asp-for="Name" maxlength="80" required autocomplete="name" />
-    <label asp-for="Email"></label><input asp-for="Email" type="email" maxlength="160" required autocomplete="username" />
-    <label asp-for="Password"></label><input asp-for="Password" type="password" minlength="8" maxlength="128" required autocomplete="new-password" /><small>Use at least 8 characters.</small>
-    <label asp-for="ConfirmPassword">Confirm password</label><input asp-for="ConfirmPassword" type="password" minlength="8" maxlength="128" required autocomplete="new-password" />
-    <div class="form-actions"><button class="button" type="submit">Create administrator</button><a asp-action="Index">Cancel</a></div>
-</form>
+@{
+    ViewData["Title"] = "Add administrator";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@ViewData["Title"] - YourAppName</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        /* Base font */
+        body, input, button, label {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+            font-size: 16px;
+            line-height: 1.4;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Form container */
+        .form-panel {
+            max-width: 480px;
+            background: #fff;
+            margin: 3rem auto 4rem;
+            padding: 2rem 2.5rem;
+            border-radius: 8px;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        /* Page heading */
+        .page-heading {
+            text-align: center;
+            margin-top: 3rem;
+            margin-bottom: 2rem;
+            padding: 0 1rem;
+        }
+
+        .page-heading .eyebrow {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #0078d7;
+            letter-spacing: 1.2px;
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+        }
+
+        .page-heading h1 {
+            font-weight: 700;
+            font-size: 2.25rem;
+            margin-bottom: 0.5rem;
+            color: #222;
+        }
+
+        .page-heading .muted {
+            font-size: 1rem;
+            color: #666666;
+        }
+
+        /* Labels */
+        label {
+            display: block;
+            margin-bottom: 0.35rem;
+            font-weight: 600;
+            color: #444;
+        }
+
+        /* Inputs */
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            border: 1.8px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            border-color: #0078d7;
+            box-shadow: 0 0 6px rgba(0,120,215,0.3);
+            outline: none;
+        }
+
+        /* Small helper text below password */
+        small {
+            display: block;
+            margin-top: 0.15rem;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        /* Validation summary */
+        .validation {
+            background-color: #ffefef;
+            color: #b00000;
+            border: 1px solid #b00000;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            box-sizing: border-box;
+        }
+
+        /* Form actions (buttons and links) */
+        .form-actions {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        button.button {
+            background-color: #0078d7;
+            color: white;
+            padding: 0.75rem 1.8rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            user-select: none;
+        }
+
+        button.button:hover,
+        button.button:focus {
+            background-color: #005a9e;
+            outline: none;
+        }
+
+        .form-actions a {
+            font-weight: 600;
+            color: #0078d7;
+            text-decoration: none;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            transition: background-color 0.3s ease;
+            user-select: none;
+        }
+
+        .form-actions a:hover,
+        .form-actions a:focus {
+            background-color: #e6f0fa;
+            outline: none;
+        }
+
+        /* Responsive styling */
+        @@media (max-width: 520px) {
+            .form-panel {
+                margin: 1rem;
+                padding: 1.5rem 2rem;
+            }
+
+            .page-heading h1 {
+                font-size: 1.75rem;
+            }
+
+            button.button {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">SIGN-IN ACCOUNTS</p>
+            <h1>Add administrator</h1>
+            <p class="muted">Create an internal admin account. The user can sign in through AITS sign in.</p>
+        </div>
+    </div>
+
+    <form asp-action="CreateAdmin" method="post" class="panel form-panel" novalidate>
+        <div asp-validation-summary="All" class="validation" role="alert"></div>
+
+        <label asp-for="Name">Admin name</label>
+        <input asp-for="Name" maxlength="80" required autocomplete="name" />
+
+        <label asp-for="Email"></label>
+        <input asp-for="Email" type="email" maxlength="160" required autocomplete="username" />
+
+        <label asp-for="Password"></label>
+        <input asp-for="Password" type="password" minlength="8" maxlength="128" required autocomplete="new-password" />
+        <small>Use at least 8 characters.</small>
+
+        <label asp-for="ConfirmPassword">Confirm password</label>
+        <input asp-for="ConfirmPassword" type="password" minlength="8" maxlength="128" required autocomplete="new-password" />
+
+        <div class="form-actions">
+            <button class="button" type="submit">Create administrator</button>
+            <a asp-action="Index">Cancel</a>
+        </div>
+    </form>
+</body>
+</html>

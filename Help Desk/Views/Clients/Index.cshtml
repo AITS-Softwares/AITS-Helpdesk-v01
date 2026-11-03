@@ -1,29 +1,526 @@
 @model DeskData
 @{
-    ViewData["Title"] = "Companies";
-    var projects = (List<CompanyProject>)ViewBag.Projects;
-    var canManageProjects = User.IsInRole("Admin") || User.IsInRole("AitsUser");
+    ViewData["Title"] = "Customers";
+    var agents = (List<AitsStaffUser>)ViewBag.Agents;
+    var assignments = (Dictionary<int, Dictionary<SupportLevel, List<int>>>)ViewBag.TeamAssignments;
 }
-<div class="page-heading"><div><p class="eyebrow">AITS COMPANY MANAGEMENT</p><h1>Companies <span class="count">@Model.Clients.Count</span></h1><p class="muted">View companies and their projects. Open a company to manage its projects, people, and tickets.</p></div>@if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { <a class="button" asp-action="Create">+ Add company</a> }</div>
-<section class="panel">
-<div class="table-scroll"><table>
-<thead><tr><th>Company</th><th>Projects</th><th>Contact email</th><th>Users</th><th>Tickets</th><th>Actions</th></tr></thead>
-<tbody>
-@foreach (var client in Model.Clients) {
-    var companyProjects = projects.Where(p => p.ClientId == client.Id).ToList();
-    <tr>
-        <td><a asp-action="Details" asp-route-id="@client.Id"><strong>@client.Name</strong></a></td>
-        <td>
-            @if (companyProjects.Count == 0) { <span class="muted">No projects added</span> }
-            @foreach (var project in companyProjects) { <div>@project.Name</div> }
-        </td>
-        <td>@client.Email</td><td>@Model.Users.Count(u => u.ClientId == client.Id)</td><td>@Model.Tickets.Count(t => t.ClientId == client.Id)</td>
-        <td>
-            @if (canManageProjects) { <a asp-action="Details" asp-route-id="@client.Id" asp-fragment="projects">Add / manage projects</a> }
-            @if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { <div><a asp-action="Edit" asp-route-id="@client.Id">Edit company</a><span> · </span><a asp-action="Delete" asp-route-id="@client.Id">Delete</a></div> }
-        </td>
-    </tr>
-}
-</tbody></table></div>
-@if (!Model.Clients.Any()) { <div class="empty">Add your first client company.</div> }
-</section>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap" />
+
+<style>
+    .cu-page {
+        --ink: #14263a;
+        --teal: #0f7b8a;
+        --teal-dark: #0b5f6b;
+        --tint: #e4f1f0;
+        --signal: #f2b544;
+        --surface: #ffffff;
+        --soft: #f5f8fa;
+        --text: #1b2733;
+        --muted: #5b6b7a;
+        --line: #d5dde4;
+        --danger: #b3261e;
+        font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        max-width: 80rem;
+        margin: 0 auto;
+        padding: clamp(0.75rem, 3vw, 2rem);
+    }
+
+        .cu-page *,
+        .cu-page *::before,
+        .cu-page *::after {
+            box-sizing: border-box;
+        }
+
+    .cu-muted {
+        color: var(--muted);
+    }
+
+    /* ---------- Heading ---------- */
+    .cu-heading {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+        .cu-heading h1 {
+            font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
+            font-size: clamp(1.5rem, 4vw, 2.1rem);
+            line-height: 1.1;
+            letter-spacing: -0.01em;
+            margin: 0 0 0.35rem;
+            color: var(--ink);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .cu-heading p {
+            margin: 0;
+            color: var(--muted);
+            max-width: 52rem;
+            line-height: 1.5;
+        }
+
+    .cu-count {
+        display: inline-grid;
+        place-items: center;
+        min-width: 1.7rem;
+        height: 1.7rem;
+        padding: 0 0.5rem;
+        border-radius: 999px;
+        background: var(--signal);
+        color: var(--ink);
+        font-family: "Figtree", system-ui, sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    /* ---------- Buttons & links ---------- */
+    .cu-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.92rem;
+        text-decoration: none;
+        color: #fff;
+        background: var(--teal);
+        border: 1.5px solid var(--teal);
+        border-radius: 0.6rem;
+        min-height: 2.6rem;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+    }
+
+        .cu-btn:hover {
+            background: var(--teal-dark);
+            border-color: var(--teal-dark);
+            color: #fff;
+        }
+
+        .cu-btn.is-outline {
+            background: transparent;
+            color: var(--teal-dark);
+        }
+
+            .cu-btn.is-outline:hover {
+                background: var(--tint);
+                color: var(--teal-dark);
+            }
+
+        .cu-btn:focus-visible,
+        .cu-link:focus-visible {
+            outline: 3px solid var(--signal);
+            outline-offset: 2px;
+        }
+
+    .cu-link {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--teal-dark);
+        text-decoration: none;
+        text-underline-offset: 3px;
+        padding: 0.3rem 0.1rem;
+    }
+
+        .cu-link:hover {
+            text-decoration: underline;
+        }
+
+        .cu-link.is-danger {
+            color: var(--danger);
+        }
+
+    /* ---------- Panel & table ---------- */
+    .cu-panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: clamp(1rem, 3vw, 1.5rem);
+        box-shadow: 0 1px 2px rgba(20, 38, 58, 0.04), 0 8px 24px rgba(20, 38, 58, 0.06);
+    }
+
+    .cu-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+    }
+
+    .cu-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+    }
+
+        .cu-table th {
+            text-align: left;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--muted);
+            background: var(--soft);
+            padding: 0.7rem 0.9rem;
+            white-space: nowrap;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .cu-table td {
+            padding: 0.8rem 0.9rem;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .cu-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .cu-table tbody tr:hover {
+            background: #fafcfd;
+        }
+
+    .cu-person {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        min-width: 0;
+    }
+
+    .cu-avatar {
+        flex: none;
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 0.6rem;
+        display: grid;
+        place-items: center;
+        background: var(--tint);
+        color: var(--teal-dark);
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+
+    .cu-person strong {
+        color: var(--ink);
+        overflow-wrap: anywhere;
+    }
+
+    .cu-email {
+        overflow-wrap: anywhere;
+    }
+
+    .cu-tickets {
+        display: inline-block;
+        min-width: 2rem;
+        text-align: center;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .cu-actions {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .cu-actions .action-control {
+        min-height: 1.8rem;
+        padding: 0.2rem 0.38rem;
+        gap: 0.25rem;
+        font-size: 0.74rem;
+    }
+
+    .cu-actions .action-control svg { width: 13px; height: 13px; flex-basis: 13px; }
+    .cu-cell-actions { min-width: 150px; }
+
+    /* ---------- Team assignment form ---------- */
+    .cu-team {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(7rem, 1fr)) auto;
+        gap: 0.45rem;
+        align-items: end;
+        margin: 0;
+    }
+
+    .cu-team-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+
+    .cu-agent-picker { position: relative; width: 100%; }
+    .cu-agent-picker-button { display:flex; align-items:center; justify-content:space-between; gap:.45rem; width:100%; min-width:0; min-height:2.25rem; padding:.35rem .55rem; border:1.5px solid var(--line); border-radius:.6rem; background:#fff; color:var(--text); font:inherit; font-size:.78rem; cursor:pointer; }
+    .cu-agent-picker-button:hover,.cu-agent-picker-button[aria-expanded="true"] { border-color:var(--teal); background:#f3fbfa; }
+    .cu-agent-picker-button>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cu-agent-picker-button svg { width:15px; height:15px; flex:0 0 15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:transform .15s; }
+    .cu-agent-picker-button[aria-expanded="true"] svg { transform:rotate(180deg); }
+    .cu-agent-picker-menu { position:fixed; inset:auto; z-index:1000; width:240px; max-width:calc(100vw - 24px); max-height:min(320px,calc(100vh - 24px)); overflow:auto; margin:0; padding:8px; border:1px solid #ccd9df; border-radius:12px; background:#fff; color:var(--text); box-shadow:0 16px 40px #14263a2b; }
+    .cu-agent-picker-menu::backdrop { background:transparent; }
+    .cu-agent-picker-menu>p { margin:3px 7px 7px; color:var(--muted); font-size:.72rem; font-weight:600; }
+    .cu-agent-option { display:flex; align-items:center; gap:9px; margin:0!important; padding:8px 7px; border-radius:7px; color:var(--text); font-size:.8rem!important; font-weight:500!important; cursor:pointer; }
+    .cu-agent-option:hover { background:var(--tint); }
+    .cu-agent-option input[type="checkbox"] { display:block; flex:0 0 16px; width:16px; height:16px; margin:0; accent-color:var(--teal); }
+    .cu-agent-empty { display:block; padding:8px 7px; color:var(--muted); font-size:.78rem; }
+
+    .cu-team .cu-btn {
+        min-height: 2.1rem;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.82rem;
+        white-space: nowrap;
+    }
+
+    .cu-lvl { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 0.76rem; font-weight: 700; color: var(--teal-dark); }
+
+        .cu-agent-picker-button:focus-visible { outline:3px solid rgba(15,123,138,.25); outline-offset:2px; }
+
+    /* level text is read by screen readers always, shown visually on small screens */
+    .cu-sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+
+    .cu-empty {
+        margin: 0;
+        padding: 1.5rem 1rem;
+        text-align: center;
+        color: var(--muted);
+        background: var(--soft);
+        border: 1px dashed var(--line);
+        border-radius: 0.8rem;
+    }
+
+    /* ---------- Responsive: table becomes cards ---------- */
+    @@media (max-width: 64rem) {
+        .cu-scroll {
+            border: 0;
+            overflow: visible;
+        }
+
+        .cu-table,
+        .cu-table tbody,
+        .cu-table tr,
+        .cu-table td {
+            display: block;
+            width: 100%;
+        }
+
+            .cu-table thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+            }
+
+            .cu-table tbody tr {
+                border: 1px solid var(--line);
+                border-radius: 0.8rem;
+                margin-bottom: 0.9rem;
+                padding: 0.4rem 0.9rem 0.6rem;
+                background: #fff;
+            }
+
+                .cu-table tbody tr:hover {
+                    background: #fff;
+                }
+
+            .cu-table td {
+                display: grid;
+                grid-template-columns: 8.5rem 1fr;
+                gap: 0.6rem;
+                padding: 0.55rem 0;
+                border-bottom: 1px solid var(--soft);
+                vertical-align: top;
+            }
+
+                .cu-table td::before {
+                    content: attr(data-label);
+                    font-size: 0.82rem;
+                    font-weight: 600;
+                    color: var(--muted);
+                }
+
+                .cu-table td:first-child {
+                    grid-template-columns: 1fr;
+                    padding-top: 0.7rem;
+                }
+
+                    .cu-table td:first-child::before,
+                    .cu-table td.cu-cell-team::before {
+                        display: none;
+                    }
+
+                .cu-table td.cu-cell-team {
+                    grid-template-columns: 1fr;
+                }
+
+                .cu-table td.cu-cell-actions {
+                    border-bottom: 0;
+                    padding-bottom: 0.2rem;
+                }
+
+        .cu-team {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+            .cu-team .cu-btn {
+                grid-column: 1 / -1;
+            }
+
+        .cu-lvl {
+            position: static;
+            width: auto;
+            height: auto;
+            overflow: visible;
+            clip: auto;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--muted);
+        }
+    }
+
+    @@media (max-width: 40rem) {
+        .cu-team {
+            grid-template-columns: 1fr;
+        }
+
+        .cu-table td {
+            grid-template-columns: 1fr;
+            gap: 0.15rem;
+        }
+
+        .cu-heading .cu-btn {
+            width: 100%;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .cu-page * {
+            transition: none !important;
+        }
+    }
+</style>
+
+<div class="cu-page">
+
+    <div class="cu-heading">
+        <div>
+            <h1>Customers <span class="cu-count">@Model.Clients.Count</span></h1>
+            <p>Assign one or more active agents to each level. Use Ctrl to select several, and choose a different agent for each level.</p>
+        </div>
+        @if (User.IsInRole("Admin"))
+        {
+            <a class="cu-btn" asp-action="Create">+ Add customer</a>
+        }
+    </div>
+
+    <section class="cu-panel">
+        <div class="cu-scroll">
+            <table class="cu-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Contact email</th>
+                        <th colspan="3">Support team <span class="cu-sr">(L1, L2, and L3 agents)</span></th>
+                        <th>Tickets</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var customer in Model.Clients)
+                    {
+                        assignments.TryGetValue(customer.Id, out var levels);
+                        var currentL1 = levels is not null && levels.TryGetValue(SupportLevel.L1, out var l1) ? l1 : new List<int>();
+                        var currentL2 = levels is not null && levels.TryGetValue(SupportLevel.L2, out var l2) ? l2 : new List<int>();
+                        var currentL3 = levels is not null && levels.TryGetValue(SupportLevel.L3, out var l3) ? l3 : new List<int>();
+                        var initial = string.IsNullOrWhiteSpace(customer.Name) ? "?" : customer.Name.Trim().Substring(0, 1).ToUpper();
+
+                        <tr>
+                            <td data-label="Customer">
+                                <div class="cu-person">
+                                    <span class="cu-avatar" aria-hidden="true">@initial</span>
+                                    <strong>@customer.Name</strong>
+                                </div>
+                            </td>
+
+                            <td data-label="Contact email"><span class="cu-email">@customer.Email</span></td>
+
+                            <td colspan="3" class="cu-cell-team" data-label="Support team">
+                                <form asp-action="AssignTeam" method="post" class="cu-team">
+                                    <input type="hidden" name="clientId" value="@customer.Id" />
+
+                                    <div class="cu-team-field">
+                                        <label><span class="cu-lvl">L1 agents</span><span class="cu-sr"> for @customer.Name</span></label>
+                                        <div class="cu-agent-picker" data-agent-picker>
+                                            <button class="cu-agent-picker-button" type="button" data-agent-picker-trigger aria-expanded="false" aria-controls="l1-picker-@customer.Id"><span data-agent-picker-count>@(currentL1.Count == 0 ? "Select agents" : $"{currentL1.Count} selected")</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                                            <div class="cu-agent-picker-menu" id="l1-picker-@customer.Id" popover="manual" role="group" aria-label="L1 agents for @customer.Name"><p>Select one or more agents</p>@if (agents.Count == 0) { <span class="cu-agent-empty">No active agents available.</span> } else { @foreach (var agent in agents) { <label class="cu-agent-option"><input type="checkbox" name="l1StaffIds" value="@agent.Id" checked="@currentL1.Contains(agent.Id)" /><span>@agent.Name</span></label> } }</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="cu-team-field">
+                                        <label><span class="cu-lvl">L2 agents</span><span class="cu-sr"> for @customer.Name</span></label>
+                                        <div class="cu-agent-picker" data-agent-picker>
+                                            <button class="cu-agent-picker-button" type="button" data-agent-picker-trigger aria-expanded="false" aria-controls="l2-picker-@customer.Id"><span data-agent-picker-count>@(currentL2.Count == 0 ? "Select agents" : $"{currentL2.Count} selected")</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                                            <div class="cu-agent-picker-menu" id="l2-picker-@customer.Id" popover="manual" role="group" aria-label="L2 agents for @customer.Name"><p>Select one or more agents</p>@if (agents.Count == 0) { <span class="cu-agent-empty">No active agents available.</span> } else { @foreach (var agent in agents) { <label class="cu-agent-option"><input type="checkbox" name="l2StaffIds" value="@agent.Id" checked="@currentL2.Contains(agent.Id)" /><span>@agent.Name</span></label> } }</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="cu-team-field">
+                                        <label><span class="cu-lvl">L3 agents</span><span class="cu-sr"> for @customer.Name</span></label>
+                                        <div class="cu-agent-picker" data-agent-picker>
+                                            <button class="cu-agent-picker-button" type="button" data-agent-picker-trigger aria-expanded="false" aria-controls="l3-picker-@customer.Id"><span data-agent-picker-count>@(currentL3.Count == 0 ? "Select agents" : $"{currentL3.Count} selected")</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                                            <div class="cu-agent-picker-menu" id="l3-picker-@customer.Id" popover="manual" role="group" aria-label="L3 agents for @customer.Name"><p>Select one or more agents</p>@if (agents.Count == 0) { <span class="cu-agent-empty">No active agents available.</span> } else { @foreach (var agent in agents) { <label class="cu-agent-option"><input type="checkbox" name="l3StaffIds" value="@agent.Id" checked="@currentL3.Contains(agent.Id)" /><span>@agent.Name</span></label> } }</div>
+                                        </div>
+                                    </div>
+
+                                    <button class="cu-btn is-outline" type="submit" aria-label="Save L1, L2, and L3 agent assignments" title="Save agent assignments">Save</button>
+                                </form>
+                            </td>
+
+                            <td data-label="Tickets"><span class="cu-tickets">@Model.Tickets.Count(t => t.ClientId == customer.Id)</span></td>
+
+                            <td class="cu-cell-actions" data-label="Actions">
+                                @if (User.IsInRole("Admin"))
+                                {
+                                    <div class="cu-actions">
+                                        <a class="cu-link action-control" asp-action="Edit" asp-route-id="@customer.Id"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg><span>Edit</span></a>
+                                        <form asp-action="Delete" method="post" class="inline-delete-form" data-confirm-delete data-confirm-title="Delete customer?" data-confirm-message="Delete @customer.Name? This cannot be undone. Customers with users or tickets cannot be deleted.">
+                                            <input type="hidden" name="id" value="@customer.Id" />
+                                            <button class="cu-link is-danger action-control" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Delete</span></button>
+                                        </form>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="cu-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (!Model.Clients.Any())
+        {
+            <p class="cu-empty">Add your first customer.</p>
+        }
+    </section>
+
+</div>

@@ -60,11 +60,4 @@ public class MyWorkController(HelpDeskDbContext db, CurrentAccess access) : Cont
         TempData["Message"] = "Client user created. You can now enable their sign-in.";
         return RedirectToAction("Create", "Account", new { userId = client.Id });
     }
-    public async Task<IActionResult> Project(int id)
-    {
-        var project = await access.Projects.AsNoTracking().Include(p => p.Client).SingleOrDefaultAsync(p => p.Id == id);
-        if (project is null) return NotFound();
-        return View(new ProjectTeamViewModel { Project = project,
-            Members = await db.StaffProjects.AsNoTracking().Include(m => m.Staff).Where(m => m.ProjectId == id).OrderBy(m => m.SupportLevel).ThenBy(m => m.Staff!.Name).ToListAsync() });
-    }
 }

@@ -11,6 +11,7 @@ public class TicketEmailWorker(IServiceScopeFactory scopeFactory, IOptionsMonito
                 if (options.CurrentValue.Enabled) {
                     using var scope = scopeFactory.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<TatOverdueEmails>().QueueAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<AutomaticTicketEscalationService>().QueueAsync(stoppingToken);
                     await scope.ServiceProvider.GetRequiredService<TicketEmailDispatcher>().ProcessBatchAsync(stoppingToken);
                 }
             }
