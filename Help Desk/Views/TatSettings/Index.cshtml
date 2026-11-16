@@ -1,6 +1,6 @@
 @model TatPolicy
-@{ ViewData["Title"] = "TAT settings"; }
-<div class="page-heading"><div><p class="eyebrow">ADMINISTRATION / SERVICE TARGETS</p><h1>Priority TAT settings</h1><p class="muted">Set how much time your support team has to resolve each ticket priority.</p></div><span class="badge">Administrator settings</span></div>
+@{ ViewData["Title"] = "Response Time Settings"; }
+<div class="page-heading"><div><p class="eyebrow">ADMINISTRATION / SERVICE TARGETS</p><h1>Priority Response Time Targets</h1><p class="muted">Set how much time your support team has to resolve each ticket priority.</p></div><span class="badge">Administrator Settings</span></div>
 <form asp-action="Index" method="post" class="panel tat-settings">
     <div class="panel-heading"><div><h2>Resolution targets</h2><p>Choose a target in calendar hours for each priority.</p></div><span class="tat-settings-clock" aria-hidden="true">◷</span></div>
     <div asp-validation-summary="All" class="validation" role="alert"></div>

@@ -88,13 +88,53 @@
     });
 
     document.addEventListener("change", event => {
+        const select = event.target;
+        if (select instanceof HTMLSelectElement && select.closest("form[data-auto-save-agents]")) {
+            const form = select.closest("form[data-auto-save-agents]");
+            const selectedName = select.closest(".customer-team-level")?.querySelector(".customer-selected-agent");
+            if (selectedName) selectedName.textContent = select.value ? select.selectedOptions[0].textContent : "No agent assigned";
+            clearTimeout(form._agentSaveTimer);
+            form._agentSaveTimer = setTimeout(() => saveAgentAssignments(form), 250);
+            return;
+        }
         const checkbox = event.target;
-        if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox" || !checkbox.closest("[data-agent-picker]")) return;
+        if (!(checkbox instanceof HTMLInputElement) || checkbox.type !== "checkbox") return;
         const picker = checkbox.closest("[data-agent-picker]");
-        const count = picker.querySelectorAll(".cu-agent-picker-menu input[type=checkbox]:checked").length;
-        const summary = picker.querySelector("[data-agent-picker-count]");
-        if (summary) summary.textContent = count === 0 ? "Select agents" : `${count} selected`;
+        if (picker) {
+            const count = picker.querySelectorAll(".cu-agent-picker-menu input[type=checkbox]:checked").length;
+            const summary = picker.querySelector("[data-agent-picker-count]");
+            if (summary) summary.textContent = count === 0 ? "Select agents" : `${count} selected`;
+        }
+        const teamForm = checkbox.closest("form.customer-team-details");
+        if (teamForm) {
+            const levelCount = teamForm.querySelectorAll(`input[name="${checkbox.name}"]:checked`).length;
+            const count = teamForm.querySelector(`[data-team-count="${checkbox.name}"]`);
+            if (count) count.textContent = `${levelCount} selected`;
+        }
+        const form = checkbox.closest("form[data-auto-save-agents]");
+        if (form) {
+            clearTimeout(form._agentSaveTimer);
+            form._agentSaveTimer = setTimeout(() => saveAgentAssignments(form), 250);
+        }
     });
+
+    async function saveAgentAssignments(form) {
+        if (form._agentSaving) { form._agentSaveQueued = true; return; }
+        form._agentSaving = true;
+        const status = form.querySelector("[data-auto-save-status]") || form.closest("[data-tat-alerts], .customer-support-panel")?.querySelector("[data-auto-save-status]");
+        if (status) status.textContent = "Saving…";
+        try {
+            const response = await fetch(form.action, { method: "POST", body: new FormData(form), headers: { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" } });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Could not save selections.");
+            if (status) status.textContent = result.message || "Saved";
+        } catch (error) {
+            if (status) status.textContent = error.message || "Could not save. Please try again.";
+        } finally {
+            form._agentSaving = false;
+            if (form._agentSaveQueued) { form._agentSaveQueued = false; saveAgentAssignments(form); }
+        }
+    }
 
     document.querySelectorAll(".cu-agent-picker-menu[popover]").forEach(menu => {
         menu.addEventListener("toggle", () => {
@@ -107,3 +147,19 @@
     window.addEventListener("resize", repositionOpenAgentMenus);
     window.addEventListener("scroll", repositionOpenAgentMenus, true);
 })();
+
+    // Keep ticket replies compact until content needs more room.
+    document.querySelectorAll("textarea[data-auto-grow]").forEach(textarea => {
+        const resize = () => {
+            textarea.style.height = "42px";
+            textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
+            textarea.style.overflowY = textarea.scrollHeight > 220 ? "auto" : "hidden";
+        };
+        textarea.addEventListener("input", resize);
+        resize();
+    });
+
+    document.querySelectorAll("form[data-auto-submit] select").forEach(select => {
+        select.addEventListener("change", () => select.form.requestSubmit());
+    });
+

@@ -3,7 +3,7 @@
 @{
     var backController = User.IsInRole("Admin") ? "Account" : "MyWork";
     var backAction = User.IsInRole("Admin") ? "Index" : "ClientUsers";
-    ViewData["Title"] = Model.Staff ? "Enable agent sign-in" : "Enable client sign-in";
+    ViewData["Title"] = "Enable agent sign-in";
 }
 
 <!DOCTYPE html>
@@ -247,7 +247,7 @@
             </select>
 
             <p class="muted">
-                Account type: <strong>@(Model.Staff ? "Agent" : "Customer user")</strong>
+                Account type: <strong>Agent</strong>
             </p>
 
             @if (Model.Users.Any())
@@ -262,11 +262,7 @@
             }
 
             <p>
-                <a asp-controller="@(User.IsInRole("Admin") ? "Users" : "MyWork")"
-                   asp-action="@(User.IsInRole("Admin") ? "Create" : "CreateClient")"
-                   asp-route-staff="@Model.Staff">
-                    @(Model.Staff ? "Add agent" : "Add a customer user")
-                </a>
+                <a asp-controller="Users" asp-action="Create" asp-route-staff="true">Add agent</a>
             </p>
         </form>
     }

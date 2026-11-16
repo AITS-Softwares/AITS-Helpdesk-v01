@@ -13,6 +13,7 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
     public IQueryable<DeskAccount> AccountsWithUsers => Accounts.Include(a => ((InternalAccount)a).Staff).Include(a => ((ClientAccount)a).ClientUser);
     public DbSet<DeskAccount> Accounts => Set<DeskAccount>();
     public DbSet<StaffProject> StaffProjects => Set<StaffProject>();
+    public DbSet<CustomerAgent> CustomerAgents => Set<CustomerAgent>();
     public DbSet<CompanyProject> Projects => Set<CompanyProject>();
     public DbSet<Client> Companies => Set<Client>();
     public DbSet<DeskUser> Users => Set<DeskUser>();
@@ -71,6 +72,9 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
         model.Entity<StaffProject>().HasKey(p => new { p.StaffId, p.ProjectId });
         model.Entity<StaffProject>().HasOne(p => p.Staff).WithMany().HasForeignKey(p => p.StaffId).OnDelete(DeleteBehavior.Cascade);
         model.Entity<StaffProject>().HasOne(p => p.Project).WithMany().HasForeignKey(p => p.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<CustomerAgent>().HasKey(assignment => new { assignment.ClientId, assignment.StaffId });
+        model.Entity<CustomerAgent>().HasOne(assignment => assignment.Client).WithMany().HasForeignKey(assignment => assignment.ClientId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<CustomerAgent>().HasOne(assignment => assignment.Staff).WithMany().HasForeignKey(assignment => assignment.StaffId).OnDelete(DeleteBehavior.Cascade);
         model.Entity<CompanyProject>().Property(p => p.Name).UseCollation("Latin1_General_100_CI_AS");
         model.Entity<CompanyProject>().HasIndex(p => new { p.ClientId, p.Name }).IsUnique();
         model.Entity<CompanyProject>().HasAlternateKey(p => new { p.ClientId, p.Id });
@@ -84,6 +88,7 @@ public class HelpDeskDbContext(DbContextOptions<HelpDeskDbContext> options) : Db
         model.Entity<Ticket>().HasOne(t => t.Requester).WithMany().HasForeignKey(t => t.RequesterId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<Ticket>().HasOne(t => t.Assignee).WithMany().HasForeignKey(t => t.AssigneeId).OnDelete(DeleteBehavior.Restrict);
         model.Entity<TicketAttachment>().HasOne(a => a.Ticket).WithMany(t => t.Attachments).HasForeignKey(a => a.TicketId).OnDelete(DeleteBehavior.Cascade);
+        model.Entity<TicketAttachment>().HasOne(a => a.Comment).WithMany(c => c.Attachments).HasForeignKey(a => a.CommentId).OnDelete(DeleteBehavior.NoAction);
         model.Entity<Ticket>().ToTable("Tickets", t => {
             t.HasCheckConstraint("CK_Ticket_Level", "SupportLevel BETWEEN 1 AND 3");
             t.HasCheckConstraint("CK_Ticket_Severity", "Severity BETWEEN 0 AND 3");

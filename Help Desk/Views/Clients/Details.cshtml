@@ -1,6 +1,64 @@
 @model DeskData
-@{ var id = (int)ViewBag.ClientId; var customer = Model.Clients.Single(c => c.Id == id); var tickets = Model.Tickets.Where(t => t.ClientId == id).OrderByDescending(t => t.UpdatedAt).ToList(); var domains = (customer.EmailDomains ?? "").Split(['\r', '\n', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); ViewData["Title"] = customer.Name; }
-<div class="company-details"><a class="company-back" asp-action="Index">← Back to customers</a><header class="company-hero"><div class="company-monogram" aria-hidden="true">@(string.Concat(customer.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => p[0])).ToUpperInvariant())</div><div class="company-identity"><p class="eyebrow">CUSTOMER</p><h1>@customer.Name</h1><div class="company-contact"><span>✉ @customer.Email</span><span>☎ @customer.Phone</span></div></div>@if (User.IsInRole("Admin")) { <a class="button button-secondary action-control" asp-action="Edit" asp-route-id="@id"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg><span>Edit customer</span></a> }</header>
-<div class="company-metrics"><a href="#company-email-domains"><span class="company-metric-icon" aria-hidden="true">✉</span><div><strong>@domains.Length</strong><span>Accepted email rules</span></div></a><a href="#company-tickets"><span class="company-metric-icon" aria-hidden="true">▤</span><div><strong>@tickets.Count</strong><span>Support tickets</span></div></a></div>
-<section id="company-email-domains" class="panel company-directory"><div class="panel-heading"><div><h2>Accepted email addresses and domains</h2><p>Incoming requests from these addresses or domains create customer tickets automatically.</p></div></div>@if (domains.Length == 0) { <p class="company-empty">No extra email rules configured. The contact email's domain is accepted.</p> } else { <ul>@foreach (var domain in domains) { <li>@domain</li> }</ul> }</section>
-<section id="company-tickets" class="panel company-directory"><div class="panel-heading"><div><h2>Customer tickets <span class="count">@tickets.Count</span></h2><p>Latest support activity for this customer.</p></div><div class="company-directory-actions"><a asp-controller="Tickets" asp-action="Index" asp-route-clientId="@id">View tickets →</a><a class="button button-secondary" asp-controller="Tickets" asp-action="Create" asp-route-clientId="@id">+ New ticket</a></div></div>@foreach (var ticket in tickets) { <a class="ticket-row" asp-controller="Tickets" asp-action="Details" asp-route-id="@ticket.Id"><span>#@ticket.Id</span><strong class="ticket-summary">@ticket.Title</strong><span class="badge @ticket.Status">@ticket.Status</span></a> }@if (tickets.Count == 0) { <p class="company-empty">No tickets yet.</p> }</section></div>
+@{
+    var id = (int)ViewBag.ClientId;
+    var customer = Model.Clients.Single(c => c.Id == id);
+    var tickets = Model.Tickets.Where(t => t.ClientId == id).OrderByDescending(t => t.UpdatedAt).ToList();
+    var agents = (List<AitsStaffUser>)ViewBag.Agents;
+    var memberships = (List<StaffProject>)ViewBag.TeamAssignments;
+    int? l1AgentId = memberships.FirstOrDefault(m => m.SupportLevel == SupportLevel.L1)?.StaffId;
+    int? l2AgentId = memberships.FirstOrDefault(m => m.SupportLevel == SupportLevel.L2)?.StaffId;
+    int? l3AgentId = memberships.FirstOrDefault(m => m.SupportLevel == SupportLevel.L3)?.StaffId;
+    var teamFields = new[] {
+        (Level: SupportLevel.L1, Id: l1AgentId, Field: "l1StaffId", Title: "Frontline support"),
+        (Level: SupportLevel.L2, Id: l2AgentId, Field: "l2StaffId", Title: "Advanced support"),
+        (Level: SupportLevel.L3, Id: l3AgentId, Field: "l3StaffId", Title: "Specialist support")
+    };
+    var statusCards = new[] {
+        (Status: TicketStatus.Open, Label: "Open", Icon: "○"),
+        (Status: TicketStatus.InProgress, Label: "In Progress", Icon: "◷"),
+        (Status: TicketStatus.Resolved, Label: "Resolved", Icon: "✓"),
+        (Status: TicketStatus.Closed, Label: "Closed", Icon: "■")
+    };
+    ViewData["Title"] = customer.Name;
+}
+<div class="company-details">
+    <a class="company-back" asp-action="Index">← Back to customers</a>
+    <header class="company-hero">
+        <div class="company-monogram" aria-hidden="true">@(string.Concat(customer.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => p[0])).ToUpperInvariant())</div>
+        <div class="company-identity"><p class="eyebrow">CUSTOMER</p><h1>@customer.Name</h1><div class="company-contact"><span>✉ @customer.Email</span><span>☎ @(customer.Phone ?? "Not provided")</span><span>GST: @(customer.GstNumber ?? "Not provided")</span></div></div>
+        @if (User.IsInRole("Admin")) { <div class="company-hero-actions"><a class="button button-secondary action-control" asp-action="Edit" asp-route-id="@id"><span>Edit customer</span></a><a class="button danger action-control" asp-action="Delete" asp-route-id="@id"><span>Delete customer</span></a></div> }
+    </header>
+
+    <div class="company-metrics customer-status-metrics">
+        @foreach (var card in statusCards) {
+            var count = tickets.Count(ticket => ticket.Status == card.Status);
+            <a asp-controller="Tickets" asp-action="Index" asp-route-clientId="@id" asp-route-status="@card.Status" class="customer-status-card status-@card.Status.ToString().ToLowerInvariant()">
+                <span class="company-metric-icon" aria-hidden="true">@card.Icon</span><div><strong>@count</strong><span>@card.Label tickets</span></div>
+            </a>
+        }
+    </div>
+
+    <section class="panel company-directory customer-support-panel">
+        <div class="panel-heading"><div><span class="customer-section-kicker">TEAM ASSIGNMENTS</span><h2>Support Team</h2><p>Select one agent for each support level. Changes save automatically.</p></div><span class="customer-save-status" data-auto-save-status aria-live="polite"></span></div>
+        <form asp-action="SaveSupportTeam" method="post" class="customer-team-details" data-auto-save-agents>
+            <input type="hidden" name="clientId" value="@id" />
+            @foreach (var team in teamFields) {
+                var selectedName = agents.FirstOrDefault(agent => agent.Id == team.Id)?.Name ?? "No agent assigned";
+                <fieldset class="customer-team-level customer-team-@team.Level.ToString().ToLowerInvariant()">
+                    <legend><span class="customer-team-code">@team.Level</span><span class="customer-team-level-title">@team.Title</span></legend>
+                    <small class="customer-selected-agent">@selectedName</small>
+                    <select name="@team.Field" aria-label="@team.Level support agent for @customer.Name">
+                        <option value="">Select agent</option>
+                        @foreach (var agent in agents) { <option value="@agent.Id" selected="@(agent.Id == team.Id)">@agent.Name</option> }
+                    </select>
+                </fieldset>
+            }
+        </form>
+    </section>
+
+    <section id="company-tickets" class="panel company-directory">
+        <div class="panel-heading"><div><h2>Customer tickets <span class="count">@tickets.Count</span></h2><p>Latest support activity for this customer.</p></div><div class="company-directory-actions"><a asp-controller="Tickets" asp-action="Index" asp-route-clientId="@id">View tickets →</a><a class="button button-secondary" asp-controller="Tickets" asp-action="Create" asp-route-clientId="@id">+ New ticket</a></div></div>
+        @foreach (var ticket in tickets) { <a class="ticket-row" asp-controller="Tickets" asp-action="Details" asp-route-id="@ticket.Id"><span>#@ticket.Id</span><strong class="ticket-summary">@ticket.Title</strong><span class="badge @ticket.Status">@ticket.Status</span></a> }
+        @if (tickets.Count == 0) { <p class="company-empty">No tickets yet.</p> }
+    </section>
+</div>

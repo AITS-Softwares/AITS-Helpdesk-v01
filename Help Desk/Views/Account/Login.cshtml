@@ -1,384 +1,73 @@
 @model LoginViewModel
 @{
     Layout = "_AuthLayout";
-    var aits = Model.Area == LoginArea.Aits;
-    ViewData["Title"] = aits ? "AITS sign in" : "Client sign in";
+    ViewData["Title"] = "Agent sign in";
 }
 
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap" />
-
 <style>
-    .aits-login {
-        --ink: #14263a;
-        --ink-soft: #c9d6e2;
-        --teal: #0f7b8a;
-        --teal-dark: #0b5f6b;
-        --tint: #e4f1f0;
-        --signal: #f2b544;
-        --page: #eef2f5;
-        --surface: #ffffff;
-        --text: #1b2733;
-        --muted: #5b6b7a;
-        --line: #d5dde4;
-        --danger: #b3261e;
-        font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        color: var(--text);
-        background: var(--page);
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        padding: clamp(1rem, 4vw, 3rem);
-        box-sizing: border-box;
-    }
-
-        .aits-login *,
-        .aits-login *::before,
-        .aits-login *::after {
-            box-sizing: border-box;
-        }
-
-    .aits-card {
-        width: 100%;
-        max-width: 30rem;
-        background: var(--surface);
-        border-radius: 1.25rem;
-        overflow: hidden;
-        box-shadow: 0 1px 2px rgba(20, 38, 58, 0.06), 0 12px 32px rgba(20, 38, 58, 0.1);
-    }
-
-    /* ---------- Header band with portal tabs ---------- */
-    .aits-head {
-        background: var(--ink);
-        color: #fff;
-        padding: clamp(1.25rem, 5vw, 2rem) clamp(1.5rem, 5vw, 2.25rem) clamp(1.5rem, 5vw, 2.25rem);
-    }
-
-    .aits-tabs {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.25rem;
-        padding: 0.25rem;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 0.8rem;
-        margin-bottom: 1.5rem;
-    }
-
-        .aits-tabs a {
-            text-align: center;
-            text-decoration: none;
-            color: var(--ink-soft);
-            font-weight: 600;
-            font-size: 0.92rem;
-            padding: 0.55rem 0.5rem;
-            border-radius: 0.6rem;
-            transition: background 0.15s, color 0.15s;
-        }
-
-            .aits-tabs a:hover {
-                color: #fff;
-            }
-
-            .aits-tabs a.selected {
-                background: #fff;
-                color: var(--ink);
-            }
-
-            .aits-tabs a:focus-visible {
-                outline: 3px solid var(--signal);
-                outline-offset: 2px;
-            }
-
-    .aits-head h2 {
-        font-family: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
-        font-size: clamp(1.5rem, 5vw, 1.9rem);
-        line-height: 1.15;
-        margin: 0 0 0.4rem;
-        letter-spacing: -0.01em;
-    }
-
-    .aits-head p {
-        margin: 0;
-        color: var(--ink-soft);
-        line-height: 1.5;
-    }
-
-    /* ---------- Body ---------- */
-    .aits-body {
-        padding: clamp(1.5rem, 5vw, 2.25rem);
-    }
-
-    .aits-form {
-        display: grid;
-        gap: 1rem;
-    }
-
-    .aits-field {
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-    }
-
-        .aits-field label {
-            font-weight: 600;
-            font-size: 0.92rem;
-            color: var(--ink);
-        }
-
-    .aits-label-row {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 1rem;
-    }
-
-        .aits-label-row a {
-            color: var(--teal-dark);
-            font-size: 0.88rem;
-            font-weight: 600;
-            text-underline-offset: 3px;
-        }
-
-    .aits-field input[type="email"],
-    .aits-field input[type="password"],
-    .aits-field input[type="text"] {
-        width: 100%;
-        font: inherit;
-        color: var(--text);
-        background: #fff;
-        border: 1.5px solid var(--line);
-        border-radius: 0.6rem;
-        padding: 0.7rem 0.85rem;
-        min-height: 2.9rem;
-        transition: border-color 0.15s, box-shadow 0.15s;
-    }
-
-    .aits-field input:hover {
-        border-color: #b4c1cc;
-    }
-
-    .aits-field input:focus-visible {
-        outline: none;
-        border-color: var(--teal);
-        box-shadow: 0 0 0 3px rgba(15, 123, 138, 0.22);
-    }
-
-    .aits-field input.input-validation-error {
-        border-color: var(--danger);
-    }
-
-    .aits-field .field-validation-error {
-        color: var(--danger);
-        font-size: 0.85rem;
-    }
-
-    /* password + eye toggle */
-    .aits-pw {
-        position: relative;
-    }
-
-        .aits-pw input {
-            padding-right: 3rem !important;
-        }
-
-        .aits-pw .password-toggle {
-            position: absolute;
-            right: 0.3rem;
-            top: 50%;
-            transform: translateY(-50%);
-            display: grid;
-            place-items: center;
-            width: 2.4rem;
-            height: 2.4rem;
-            border: 0;
-            border-radius: 0.5rem;
-            background: transparent;
-            color: var(--muted);
-            cursor: pointer;
-        }
-
-            .aits-pw .password-toggle[hidden],
-            .aits-pw .password-toggle svg[hidden] {
-                display: none;
-            }
-
-            .aits-pw .password-toggle:hover {
-                background: var(--tint);
-                color: var(--teal-dark);
-            }
-
-            .aits-pw .password-toggle:focus-visible {
-                outline: 2px solid var(--teal);
-                outline-offset: 1px;
-            }
-
-            .aits-pw .password-toggle svg {
-                width: 1.3rem;
-                height: 1.3rem;
-                fill: none;
-                stroke: currentColor;
-                stroke-width: 1.8;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-            }
-
-    .aits-body .validation {
-        background: #fdecea;
-        border: 1px solid #f3c1bd;
-        color: var(--danger);
-        border-radius: 0.6rem;
-        padding: 0.75rem 1rem;
-        font-size: 0.92rem;
-    }
-
-        .aits-body .validation.validation-summary-valid,
-        .aits-body .validation:empty {
-            display: none;
-        }
-
-        .aits-body .validation ul {
-            margin: 0;
-            padding-left: 1.1rem;
-        }
-
-    .aits-submit {
-        margin-top: 0.2rem;
-        font: inherit;
-        font-weight: 600;
-        font-size: 1rem;
-        color: #fff;
-        background: var(--teal);
-        border: 0;
-        border-radius: 0.65rem;
-        min-height: 3rem;
-        padding: 0.75rem 1.25rem;
-        cursor: pointer;
-        transition: background 0.15s, transform 0.05s;
-    }
-
-        .aits-submit:hover {
-            background: var(--teal-dark);
-        }
-
-        .aits-submit:active {
-            transform: translateY(1px);
-        }
-
-        .aits-submit:focus-visible {
-            outline: 3px solid var(--signal);
-            outline-offset: 2px;
-        }
-
-    .aits-links {
-        margin: 1.5rem 0 0;
-        padding-top: 1.1rem;
-        border-top: 1px solid var(--line);
-        font-size: 0.92rem;
-        color: var(--muted);
-    }
-
-        .aits-links a,
-        .aits-setup a {
-            color: var(--teal-dark);
-            font-weight: 600;
-            text-underline-offset: 3px;
-        }
-
-            .aits-links a:focus-visible,
-            .aits-setup a:focus-visible,
-            .aits-label-row a:focus-visible {
-                outline: 2px solid var(--signal);
-                outline-offset: 2px;
-                border-radius: 2px;
-            }
-
-    .aits-setup {
-        margin: 0.9rem 0 0;
-        font-size: 0.88rem;
-    }
-
-    /* ---------- Responsive ---------- */
-    @@media (max-width: 30rem) {
-        .aits-login {
-            padding: 0.75rem;
-            align-items: start;
-        }
-
-        .aits-card {
-            border-radius: 1rem;
-        }
-    }
-
-    @@media (prefers-reduced-motion: reduce) {
-        .aits-login * {
-            transition: none !important;
-        }
-    }
+    .agent-login{width:100%;max-width:460px;margin:auto}
+    .agent-login-kicker{display:inline-flex;align-items:center;gap:8px;margin:0 0 16px;padding:7px 11px;border:1px solid #d8eeec;border-radius:999px;background:#f1faf9;color:#0b737d;font-size:11px;font-weight:750;letter-spacing:.06em}
+    .agent-login-kicker:before{content:"";width:8px;height:8px;border-radius:50%;background:#20a181;box-shadow:0 0 0 3px #d8f3e8}
+    .agent-login h1{margin:0;color:#172b40;font-size:clamp(32px,3.2vw,40px);line-height:1.1;letter-spacing:-1.1px}
+    .agent-login-intro{margin:11px 0 26px;color:#617286;font-size:15px;line-height:1.65}
+    .agent-login-form{display:grid;gap:19px}
+    .agent-login-field{display:grid;gap:8px}
+    .agent-login-field label,.agent-login-label-row label{margin:0;color:#26384c;font-size:14px;font-weight:700}
+    .agent-login-field input{width:100%;height:52px;padding:0 14px;border:1px solid #d7e0ea;border-radius:11px;background:#fff;color:#1c2c40;font-size:15px;transition:border-color .15s,box-shadow .15s}
+    .agent-login-field input:focus{outline:0;border-color:#14828b;box-shadow:0 0 0 4px #14828b18}
+    .agent-login-label-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .agent-login-label-row a{color:#0b737d;font-size:13px;font-weight:650;text-decoration:none}
+    .agent-login-label-row a:hover{text-decoration:underline}
+    .agent-password-wrap{position:relative}
+    .agent-password-wrap input{padding-right:52px}
+    .agent-password-toggle{position:absolute;top:50%;right:8px;display:grid;place-items:center;width:38px;height:38px;transform:translateY(-50%);border:0;border-radius:8px;background:transparent;color:#66788b}
+    .agent-password-toggle:hover{background:#f0f5f7;color:#0b737d}
+    .agent-password-toggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .agent-login-submit{width:100%;min-height:52px;margin-top:3px;border:0;border-radius:11px;background:linear-gradient(105deg,#117b85,#0d8c87);box-shadow:0 8px 18px #0e7f851e;color:white;font-size:15px;font-weight:750;transition:transform .15s,box-shadow .15s}
+    .agent-login-submit:hover{transform:translateY(-1px);box-shadow:0 11px 22px #0e7f852a}
+    .agent-login-validation{margin-bottom:14px;color:#a42f43;font-size:13px}
+    .agent-login-footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;margin:22px 0 0;padding-top:18px;border-top:1px solid #e7ebf0;color:#66778a;font-size:13px}
+    .agent-login-footer a{color:#0b737d;font-weight:700;text-decoration:none}
+    .agent-login-footer a:hover{text-decoration:underline}
+    .agent-login-setup{margin:14px 0 0;color:#7b8998;font-size:12px}
+    .agent-login-setup a{color:#536b80;font-weight:650}
+    @@media(max-width:720px){.agent-login{max-width:none}.agent-login h1{font-size:32px}.agent-login-intro{font-size:14px;margin-bottom:22px}}
 </style>
 
-<div class="aits-login">
-    <div class="aits-card">
+<section class="agent-login" aria-labelledby="agent-login-title">
+    <span class="agent-login-kicker">AGENT &amp; ADMINISTRATOR PORTAL</span>
+    <h1 id="agent-login-title">Welcome back</h1>
+    <p class="agent-login-intro">Sign in to manage your support work and customer tickets.</p>
 
-        <header class="aits-head">
-            <nav class="aits-tabs" aria-label="Sign-in area">
-                <a class="@(aits ? "selected" : "")" asp-action="AitsLogin" aria-current="@(aits ? "page" : null)">AITS login</a>
-                <a class="@(!aits ? "selected" : "")" asp-action="Login" aria-current="@(!aits ? "page" : null)">Client login</a>
-            </nav>
+    <form asp-action="Login" method="post" class="agent-login-form" novalidate>
+        <input asp-for="Area" type="hidden" />
+        <input asp-for="ReturnUrl" type="hidden" />
+        <div asp-validation-summary="All" class="agent-login-validation" role="alert"></div>
 
-            <h2>@ViewData["Title"]</h2>
-            <p>@(aits ? "One sign-in for AITS administrators and support agents." : "Sign in to raise and track your support requests.")</p>
-        </header>
+        <div class="agent-login-field">
+            <label asp-for="Email">Work email</label>
+            <input asp-for="Email" type="email" autocomplete="username" placeholder="name@company.com" required />
+            <span asp-validation-for="Email" class="field-validation-error"></span>
+        </div>
 
-        <main class="aits-body">
-            <form asp-action="Login" method="post" class="aits-form" novalidate>
-                <input asp-for="Area" type="hidden" />
-                <input asp-for="ReturnUrl" type="hidden" />
-                <div asp-validation-summary="All" class="validation" role="alert"></div>
+        <div class="agent-login-field">
+            <div class="agent-login-label-row"><label asp-for="Password"></label><a asp-action="ForgotPassword" asp-route-loginArea="@LoginArea.Aits">Forgot password?</a></div>
+            <div class="agent-password-wrap">
+                <input asp-for="Password" type="password" autocomplete="current-password" required />
+                <button id="passwordToggle" class="agent-password-toggle" type="button" aria-controls="Password" aria-label="Show password" aria-pressed="false" title="Show password" hidden>
+                    <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="m3 3 18 18M10.6 5.1 12 5c6.5 0 10 7 10 7a20 20 0 0 1-3.1 4.1M6.2 6.2A23 23 0 0 0 2 12s3.5 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+                </button>
+            </div>
+            <span asp-validation-for="Password" class="field-validation-error"></span>
+        </div>
 
-                <div class="aits-field">
-                    <label asp-for="Email">Email address</label>
-                    <input asp-for="Email" type="email" autocomplete="username" required />
-                    <span asp-validation-for="Email"></span>
-                </div>
+        <button type="submit" class="agent-login-submit">Sign in to workspace <span aria-hidden="true">→</span></button>
+    </form>
 
-                <div class="aits-field">
-                    <div class="aits-label-row">
-                        <label asp-for="Password"></label>
-                        <a asp-action="ForgotPassword" asp-route-loginArea="@Model.Area">Forgot password?</a>
-                    </div>
-                    <div class="aits-pw">
-                        <input asp-for="Password" type="password" autocomplete="current-password" required />
-                        <button id="passwordToggle" class="password-toggle" type="button" aria-controls="Password" aria-label="Show password" aria-pressed="false" title="Show password" hidden>
-                            <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
-                            <svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" focusable="false" hidden><path d="m3 3 18 18M10.6 5.1 12 5c6.5 0 10 7 10 7a20 20 0 0 1-3.1 4.1M6.2 6.2A23 23 0 0 0 2 12s3.5 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
-                        </button>
-                    </div>
-                    <span asp-validation-for="Password"></span>
-                </div>
-
-                <button type="submit" class="aits-submit">Sign in</button>
-            </form>
-
-            <p class="aits-links">
-                @if (aits)
-                {
-                    <text>New to the Agent team? <a asp-action="AitsSignup">Create an Agent account</a></text>
-                }
-                else
-                {
-                    <text>New customer user? <a asp-action="Signup">Create a customer account</a></text>
-                }
-            </p>
-
-            @if (aits && ViewBag.CanSetup == true)
-            {
-                <p class="aits-setup"><a asp-action="Setup">Set up the first AITS admin</a></p>
-            }
-        </main>
-
-    </div>
-</div>
+    <div class="agent-login-footer"><span>New agent?</span><a asp-action="AitsSignup">Request an agent account</a></div>
+    @if (ViewBag.CanSetup == true) { <p class="agent-login-setup">First time here? <a asp-action="Setup">Set up the first administrator</a></p> }
+</section>
 
 @section Scripts {
     <script>

@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Mail;
 using System.Net.Mime;
 using System.Text;
-using System.Text.Encodings.Web;
 using Help_Desk.Data;
 using Help_Desk.Models;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace Help_Desk.Services;
 
 public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketEmailOptions> options,
-    EmailCredentialStore credentials, IWebHostEnvironment environment, ILogger<TicketEmailDispatcher> logger)
+    EmailCredentialStore credentials, IWebHostEnvironment environment, TicketTatPolicy tatPolicy, ILogger<TicketEmailDispatcher> logger)
 {
     public async Task ProcessBatchAsync(CancellationToken cancellationToken)
     {
@@ -33,6 +32,7 @@ public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketE
             var item = await db.TicketEmailNotifications.Include(n => n.Ticket)!.ThenInclude(t => t!.Client)
                 .Include(n => n.Ticket)!.ThenInclude(t => t!.Project)
                 .Include(n => n.Ticket)!.ThenInclude(t => t!.Requester)
+                .Include(n => n.Ticket)!.ThenInclude(t => t!.Attachments)
                 .SingleOrDefaultAsync(n => n.Id == id, cancellationToken);
             if (item is null) continue;
             // Recheck current membership, activity, account approval and address immediately before delivery.
@@ -82,7 +82,8 @@ public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketE
     {
         var settings = options.CurrentValue;
         var from = string.IsNullOrWhiteSpace(settings.FromAddress) ? settings.UserName : settings.FromAddress;
-        using var mail = Compose(notification, from, settings);
+        var mailPolicy = await tatPolicy.ReadAsync();
+        using var mail = Compose(notification, from, settings, mailPolicy, environment.ContentRootPath);
         using var smtp = new SmtpClient();
         if (string.Equals(settings.Transport, "Pickup", StringComparison.OrdinalIgnoreCase)) {
             if (!environment.IsDevelopment()) throw new InvalidOperationException("Pickup delivery is only allowed in Development.");
@@ -106,28 +107,50 @@ public class TicketEmailDispatcher(HelpDeskDbContext db, IOptionsMonitor<TicketE
         await smtp.SendMailAsync(mail, timeout.Token);
     }
 
-    private static MailMessage Compose(TicketEmailNotification notification, string from, TicketEmailOptions settings)
+    private static MailMessage Compose(TicketEmailNotification notification, string from, TicketEmailOptions settings, TatPolicy policy, string contentRootPath)
     {
         var ticket = notification.Ticket!;
         var customer = ticket.Client?.Name ?? "Customer";
         var overdue = notification.Kind == TicketEmailKind.TatOverdue;
         var escalated = notification.Kind == TicketEmailKind.AutoEscalated;
-        var heading = overdue ? "TAT deadline missed — your assigned ticket needs attention." : escalated ? $"An urgent ticket was escalated to {ticket.SupportLevel} because the previous team did not respond in time." : "A ticket requires attention from your assigned agent team.";
+        var heading = overdue ? "TAT deadline missed — your assigned ticket needs attention." : escalated ? $"Urgent ticket automatically escalated to {ticket.SupportLevel}." : null;
+        var previousLevel = ticket.SupportLevel == SupportLevel.L3 ? SupportLevel.L2 : SupportLevel.L1;
+        var explanation = escalated
+            ? $"This ticket moved automatically from {previousLevel} to {ticket.SupportLevel} because no staff reply was recorded within the configured {previousLevel} response window. Please review it and respond promptly."
+            : notification.Kind == TicketEmailKind.Created && ticket.Priority == TicketPriority.Urgent
+                ? ticket.SupportLevel == SupportLevel.L1
+                    ? $"Urgent response schedule: L1 has {policy.L1ResponseHours} hour(s) to respond. If no staff reply is recorded, the ticket automatically moves to L2. If L2 does not respond within {policy.L2ResponseHours} hour(s), it moves to L3. A customer reply restarts the active response window."
+                    : $"Urgent response schedule: this ticket is at {ticket.SupportLevel}. If no staff reply is recorded within the configured L2 response window ({policy.L2ResponseHours} hour(s)), it automatically moves to L3. A customer reply restarts the active response window."
+                : null;
         var deadline = TicketTiming.DueAt(ticket);
-        var subject = (overdue ? "[TAT OVERDUE] " : escalated ? $"[URGENT ESCALATED TO {ticket.SupportLevel}] " : "") + $"[Ticket #{ticket.Id:D4}] {customer}: {ticket.Title}".Replace('\r', ' ').Replace('\n', ' ');
+        var subject = (overdue ? "[TAT OVERDUE] " : escalated ? $"[URGENT ESCALATED TO {ticket.SupportLevel}] " : "") + TicketEmailSubject.Base(ticket);
         string? link = null;
         if (Uri.TryCreate(settings.PublicBaseUrl, UriKind.Absolute, out var baseUri) &&
             (baseUri.Scheme == "https" || baseUri.Scheme == "http") && string.IsNullOrEmpty(baseUri.UserInfo) && string.IsNullOrEmpty(baseUri.Query) && string.IsNullOrEmpty(baseUri.Fragment))
             link = settings.PublicBaseUrl.TrimEnd('/') + "/Tickets/Details/" + ticket.Id;
-        var text = $"{heading}\nResolution deadline (UTC): {deadline:dd MMM yyyy, HH:mm}\n\nTicket: #{ticket.Id:D4}\nCustomer: {customer}\nTitle: {ticket.Title}\nPriority: {ticket.Priority}\nSupport level: {ticket.SupportLevel}\nStatus: {ticket.Status}\nRequester: {ticket.Requester?.Name} ({ticket.Requester?.Email})\nCreated (UTC): {ticket.CreatedAt:dd MMM yyyy, HH:mm}\n\nDescription:\n{ticket.Description}\n\n" +
+        var text = $"{(heading is null ? "" : heading + "\n")}{(explanation is null ? "" : explanation + "\n\n")}Resolution deadline (IST): {TicketTiming.ToIndiaTime(deadline):dd MMM yyyy, hh:mm tt}\n\nTicket: #{ticket.Id:D4}\nCustomer: {customer}\nTitle: {ticket.Title}\nPriority: {ticket.Priority}\nSupport level: {ticket.SupportLevel}\nStatus: {ticket.Status}\nRequester: {ticket.Requester?.Name} ({ticket.Requester?.Email})\nCreated (IST): {TicketTiming.ToIndiaTime(ticket.CreatedAt):dd MMM yyyy, hh:mm tt}\n\nDescription:\n{ticket.Description}\n\n" +
             (link is null ? "Open AITS Helpdesk and search for this ticket number." : "View ticket: " + link + "\nSign in with your AITS account to view the ticket and any photo.");
-        static string H(string? value) => HtmlEncoder.Default.Encode(value ?? "");
-        var color = ticket.Priority switch { TicketPriority.Urgent => "#ae213d", TicketPriority.High => "#9a4c00", TicketPriority.Low => "#245ca7", _ => "#725b00" };
-        var html = $"<div style='font-family:Arial,sans-serif;color:#222a40;max-width:640px;margin:auto'><h2 style='color:#6255d9'>AITS Helpdesk · Ticket #{ticket.Id:D4}</h2><p>{H(heading)}</p><p><strong>Resolution deadline (UTC): {deadline:dd MMM yyyy, HH:mm}</strong></p><h3>{H(ticket.Title)}</h3><table cellpadding='8' style='border-collapse:collapse;background:#f5f6fa;width:100%'><tr><td>Customer</td><td>{H(customer)}</td></tr><tr><td>Priority</td><td style='color:{color};font-weight:bold'>{ticket.Priority}</td></tr><tr><td>Support level</td><td>{ticket.SupportLevel}</td></tr><tr><td>Status</td><td>{ticket.Status}</td></tr><tr><td>Requester</td><td>{H(ticket.Requester?.Name)} · {H(ticket.Requester?.Email)}</td></tr><tr><td>Created (UTC)</td><td>{ticket.CreatedAt:dd MMM yyyy, HH:mm}</td></tr></table><h4>Description</h4><p style='white-space:pre-wrap'>{H(ticket.Description)}</p>" +
-            (link is null ? "<p>Open AITS Helpdesk and search for this ticket number.</p>" : $"<p><a href='{H(link)}' style='color:#6255d9'>Open ticket →</a></p><small>Sign in with your AITS account to view the ticket and any photo.</small>") + "</div>";
+        var intro = string.Join("\n\n", new[] { heading, explanation }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        var details = new List<(string Label, string Value)> {
+            ("Ticket", $"#{ticket.Id:D4}"), ("Title", ticket.Title), ("Customer", customer),
+            ("Priority", ticket.Priority.ToString()), ("Support level", ticket.SupportLevel.ToString()),
+            ("Status", ticket.Status.ToString()), ("Requester", $"{ticket.Requester?.Name} · {ticket.Requester?.Email}"),
+            ("Created (IST)", TicketTiming.ToIndiaTime(ticket.CreatedAt).ToString("dd MMM yyyy, hh:mm tt")),
+            ("Resolution deadline (IST)", TicketTiming.ToIndiaTime(deadline).ToString("dd MMM yyyy, hh:mm tt"))
+        };
+        var html = TicketEmailHtml.Render($"Ticket #{ticket.Id:D4}", intro, details,
+            messageTitle: "Description", message: ticket.Description,
+            actionLabel: link is null ? null : "Open ticket", actionUrl: link,
+            footer: link is null ? "Open AITS Helpdesk and search for this ticket number. Sign in with your AITS account to view the ticket and any attachment." : "Sign in with your AITS account to view the ticket and any attachment.");
         var mail = new MailMessage { From = new MailAddress(from, settings.FromName), Subject = subject, SubjectEncoding = Encoding.UTF8, Body = text, BodyEncoding = Encoding.UTF8 };
         mail.To.Add(notification.RecipientEmail);
-        mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(html, Encoding.UTF8, MediaTypeNames.Text.Html));
+        if (notification.Kind == TicketEmailKind.Created) {
+            foreach (var file in ticket.Attachments) {
+                var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+                mail.Attachments.Add(new Attachment(new MemoryStream(file.Data, writable: false), file.FileName, contentType));
+            }
+        }
+        mail.AlternateViews.Add(TicketEmailHtml.CreateView(html));
         mail.Headers.Add("Message-ID", $"<aits-ticket-{notification.TicketId}-staff-{notification.StaffId}-kind-{(int)notification.Kind}-notification-{notification.Id}@{new MailAddress(from).Host}>");
         return mail;
     }

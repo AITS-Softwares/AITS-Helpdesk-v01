@@ -30,6 +30,7 @@ builder.Services.Configure<TicketEmailOptions>(builder.Configuration.GetSection(
 builder.Services.AddSingleton<EmailCredentialStore>();
 builder.Services.AddSingleton<EmailSettingsStore>();
 builder.Services.AddScoped<TicketCreatedEmails>();
+builder.Services.AddScoped<TicketReplyEmails>();
 builder.Services.AddScoped<TicketEmailDispatcher>();
 builder.Services.AddScoped<InboundTicketEmailProcessor>();
 builder.Services.AddHostedService<TicketEmailWorker>();
@@ -60,7 +61,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
                 account.DeskUserId?.ToString() != principal.FindFirst("desk_user_id")?.Value ||
                 account.DeskUser?.ClientId?.ToString() != principal.FindFirst("company_id")?.Value ||
                 (account.Role == AccountRole.AitsUser && (account.DeskUser is not AitsStaffUser staff || !staff.IsActive)) ||
-                (account.Role == AccountRole.ClientUser && account.DeskUser?.UserType != UserType.ClientUser))
+                account.Role == AccountRole.ClientUser)
                 context.Fail("Account access changed. Sign in again.");
         },
         OnChallenge = context => {

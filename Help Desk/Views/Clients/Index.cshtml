@@ -3,6 +3,7 @@
     ViewData["Title"] = "Customers";
     var agents = (List<AitsStaffUser>)ViewBag.Agents;
     var assignments = (Dictionary<int, Dictionary<SupportLevel, List<int>>>)ViewBag.TeamAssignments;
+    var customerAgentAssignments = (Dictionary<int, List<int>>)ViewBag.CustomerAgentAssignments;
 }
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -157,9 +158,18 @@
 
     .cu-table {
         width: 100%;
+        min-width: 1120px;
         border-collapse: collapse;
         font-size: 0.92rem;
     }
+
+    .cu-table td:nth-child(1), .cu-table th:nth-child(1) { width: 16%; }
+    .cu-table td:nth-child(2), .cu-table th:nth-child(2) { width: 18%; }
+    .cu-table td:nth-child(3), .cu-table th:nth-child(3) { width: 12%; }
+    .cu-table td:nth-child(4), .cu-table th:nth-child(4) { width: 21%; }
+    .cu-table td:nth-child(5), .cu-table th:nth-child(5) { width: 17%; }
+    .cu-table td:nth-child(6), .cu-table th:nth-child(6) { width: 7%; }
+    .cu-table td:nth-child(7), .cu-table th:nth-child(7) { width: 9%; }
 
         .cu-table th {
             text-align: left;
@@ -247,8 +257,8 @@
     /* ---------- Team assignment form ---------- */
     .cu-team {
         display: grid;
-        grid-template-columns: repeat(3, minmax(7rem, 1fr)) auto;
-        gap: 0.45rem;
+        grid-template-columns: repeat(3, minmax(6rem, 1fr)) auto;
+        gap: 0.35rem;
         align-items: end;
         margin: 0;
     }
@@ -259,6 +269,7 @@
         gap: 0.25rem;
         min-width: 0;
     }
+    .cu-team-field select { width:205px; max-width:100%; min-height:40px; padding:.4rem .65rem; font-size:.8rem; }
 
     .cu-agent-picker { position: relative; width: 100%; }
     .cu-agent-picker-button { display:flex; align-items:center; justify-content:space-between; gap:.45rem; width:100%; min-width:0; min-height:2.25rem; padding:.35rem .55rem; border:1.5px solid var(--line); border-radius:.6rem; background:#fff; color:var(--text); font:inherit; font-size:.78rem; cursor:pointer; }
@@ -275,11 +286,19 @@
     .cu-agent-empty { display:block; padding:8px 7px; color:var(--muted); font-size:.78rem; }
 
     .cu-team .cu-btn {
-        min-height: 2.1rem;
-        padding: 0.3rem 0.6rem;
-        font-size: 0.82rem;
+        min-height: 1.9rem;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.76rem;
         white-space: nowrap;
     }
+
+    .cu-assignee-form { display:flex; align-items:center; gap:.35rem; margin:0; }
+    .cu-assignee-form .cu-agent-picker { max-width:9rem; }
+    .cu-assignee-form .cu-agent-picker-button { min-height:2rem; padding:.25rem .45rem; font-size:.74rem; }
+    .cu-assignee-form .cu-btn { min-height:2rem; padding:.25rem .45rem; font-size:.74rem; }
+    .cu-table td.cu-cell-team { min-width:0; }
+    .cu-cell-team .cu-agent-picker { max-width:205px; }
+    .cu-table td[data-label="Assign agent"] { min-width:170px; }
 
     .cu-lvl { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 0.76rem; font-weight: 700; color: var(--teal-dark); }
 
@@ -319,6 +338,8 @@
             display: block;
             width: 100%;
         }
+
+            .cu-table { min-width: 0; }
 
             .cu-table thead {
                 position: absolute;
@@ -422,7 +443,7 @@
     <div class="cu-heading">
         <div>
             <h1>Customers <span class="cu-count">@Model.Clients.Count</span></h1>
-            <p>Assign one or more active agents to each level. Use Ctrl to select several, and choose a different agent for each level.</p>
+            <p>Choose one L1 agent for each customer. Open a customer to manage its L2 and L3 support teams.</p>
         </div>
         @if (User.IsInRole("Admin"))
         {
@@ -437,7 +458,8 @@
                     <tr>
                         <th>Customer</th>
                         <th>Contact email</th>
-                        <th colspan="3">Support team <span class="cu-sr">(L1, L2, and L3 agents)</span></th>
+                        <th>GST Number</th>
+                        <th>Support Team (L1)</th>
                         <th>Tickets</th>
                         <th>Actions</th>
                     </tr>
@@ -447,49 +469,30 @@
                     {
                         assignments.TryGetValue(customer.Id, out var levels);
                         var currentL1 = levels is not null && levels.TryGetValue(SupportLevel.L1, out var l1) ? l1 : new List<int>();
-                        var currentL2 = levels is not null && levels.TryGetValue(SupportLevel.L2, out var l2) ? l2 : new List<int>();
-                        var currentL3 = levels is not null && levels.TryGetValue(SupportLevel.L3, out var l3) ? l3 : new List<int>();
+                        var selectedL1Id = currentL1.FirstOrDefault();
                         var initial = string.IsNullOrWhiteSpace(customer.Name) ? "?" : customer.Name.Trim().Substring(0, 1).ToUpper();
 
                         <tr>
                             <td data-label="Customer">
                                 <div class="cu-person">
                                     <span class="cu-avatar" aria-hidden="true">@initial</span>
-                                    <strong>@customer.Name</strong>
+                                    <strong><a asp-action="Details" asp-route-id="@customer.Id">@customer.Name</a></strong>
                                 </div>
                             </td>
 
                             <td data-label="Contact email"><span class="cu-email">@customer.Email</span></td>
 
-                            <td colspan="3" class="cu-cell-team" data-label="Support team">
-                                <form asp-action="AssignTeam" method="post" class="cu-team">
+                            <td data-label="GST Number"><span class="cu-gst">@(string.IsNullOrWhiteSpace(customer.GstNumber) ? "—" : customer.GstNumber)</span></td>
+
+                            <td class="cu-cell-team" data-label="Support Team (L1)">
+                                <form asp-action="SaveL1Agents" method="post" class="cu-team-field" data-auto-save-agents>
                                     <input type="hidden" name="clientId" value="@customer.Id" />
-
-                                    <div class="cu-team-field">
-                                        <label><span class="cu-lvl">L1 agents</span><span class="cu-sr"> for @customer.Name</span></label>
-                                        <div class="cu-agent-picker" data-agent-picker>
-                                            <button class="cu-agent-picker-button" type="button" data-agent-picker-trigger aria-expanded="false" aria-controls="l1-picker-@customer.Id"><span data-agent-picker-count>@(currentL1.Count == 0 ? "Select agents" : $"{currentL1.Count} selected")</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
-                                            <div class="cu-agent-picker-menu" id="l1-picker-@customer.Id" popover="manual" role="group" aria-label="L1 agents for @customer.Name"><p>Select one or more agents</p>@if (agents.Count == 0) { <span class="cu-agent-empty">No active agents available.</span> } else { @foreach (var agent in agents) { <label class="cu-agent-option"><input type="checkbox" name="l1StaffIds" value="@agent.Id" checked="@currentL1.Contains(agent.Id)" /><span>@agent.Name</span></label> } }</div>
-                                        </div>
-                                    </div>
-
-                                    <div class="cu-team-field">
-                                        <label><span class="cu-lvl">L2 agents</span><span class="cu-sr"> for @customer.Name</span></label>
-                                        <div class="cu-agent-picker" data-agent-picker>
-                                            <button class="cu-agent-picker-button" type="button" data-agent-picker-trigger aria-expanded="false" aria-controls="l2-picker-@customer.Id"><span data-agent-picker-count>@(currentL2.Count == 0 ? "Select agents" : $"{currentL2.Count} selected")</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
-                                            <div class="cu-agent-picker-menu" id="l2-picker-@customer.Id" popover="manual" role="group" aria-label="L2 agents for @customer.Name"><p>Select one or more agents</p>@if (agents.Count == 0) { <span class="cu-agent-empty">No active agents available.</span> } else { @foreach (var agent in agents) { <label class="cu-agent-option"><input type="checkbox" name="l2StaffIds" value="@agent.Id" checked="@currentL2.Contains(agent.Id)" /><span>@agent.Name</span></label> } }</div>
-                                        </div>
-                                    </div>
-
-                                    <div class="cu-team-field">
-                                        <label><span class="cu-lvl">L3 agents</span><span class="cu-sr"> for @customer.Name</span></label>
-                                        <div class="cu-agent-picker" data-agent-picker>
-                                            <button class="cu-agent-picker-button" type="button" data-agent-picker-trigger aria-expanded="false" aria-controls="l3-picker-@customer.Id"><span data-agent-picker-count>@(currentL3.Count == 0 ? "Select agents" : $"{currentL3.Count} selected")</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
-                                            <div class="cu-agent-picker-menu" id="l3-picker-@customer.Id" popover="manual" role="group" aria-label="L3 agents for @customer.Name"><p>Select one or more agents</p>@if (agents.Count == 0) { <span class="cu-agent-empty">No active agents available.</span> } else { @foreach (var agent in agents) { <label class="cu-agent-option"><input type="checkbox" name="l3StaffIds" value="@agent.Id" checked="@currentL3.Contains(agent.Id)" /><span>@agent.Name</span></label> } }</div>
-                                        </div>
-                                    </div>
-
-                                    <button class="cu-btn is-outline" type="submit" aria-label="Save L1, L2, and L3 agent assignments" title="Save agent assignments">Save</button>
+                                    <span class="cu-sr">Support Team (L1) for @customer.Name</span>
+                                    <select name="staffId" aria-label="Support Team (L1) for @customer.Name">
+                                        <option value="">Select L1 agent</option>
+                                        @foreach (var agent in agents) { <option value="@agent.Id" selected="@(agent.Id == selectedL1Id)">@agent.Name</option> }
+                                    </select>
+                                    <small data-auto-save-status aria-live="polite"></small>
                                 </form>
                             </td>
 

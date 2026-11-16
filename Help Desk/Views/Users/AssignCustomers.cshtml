@@ -1,7 +1,56 @@
 @model StaffProjectsViewModel
-@{ ViewData["Title"] = "Assign customers"; var customers = Model.Projects.Select(p => p.Client!).DistinctBy(c => c.Id).OrderBy(c => c.Name).ToList(); }
-<div class="page-heading"><div><a asp-action="AitsStaff">Back to agents</a><h1>Assign customers</h1><p class="muted">@Model.Staff.Name · @Model.Staff.Email</p></div></div>
-<form asp-action="AssignCustomers" asp-route-id="@Model.Staff.Id" method="post" class="panel form-panel assignment-panel"><div asp-validation-summary="All" class="validation"></div><p>Select the customers this agent supports. The agent can see tickets and customer users across each selected customer.</p>
-@foreach (var customer in customers) { <label class="project-choice"><input type="checkbox" name="SelectedClientIds" value="@customer.Id" checked="@Model.SelectedClientIds.Contains(customer.Id)" /> @customer.Name</label> }
-@if (!customers.Any()) { <p class="muted">Add a customer first.</p> }
-<div class="form-actions"><button class="button" type="submit">Save assignments</button><a asp-action="AitsStaff">Back to agents</a></div></form>
+@{
+    ViewData["Title"] = "Assign Customers";
+}
+<style>
+    .assign-customer-page{display:grid;gap:18px;max-width:880px;margin:0 auto}
+    .assign-customer-back{width:max-content;color:var(--muted);font-size:13px;font-weight:600;text-decoration:none}.assign-customer-back:hover{color:var(--primary);text-decoration:underline}
+    .assign-customer-hero{padding:23px 26px;border:1px solid #dfdcf5;border-radius:16px;background:radial-gradient(ellipse at 95% 0%,#e2deff 0,transparent 40%),linear-gradient(110deg,#fff,#f7f5ff)}
+    .assign-customer-kicker{color:#6b57d8;font-size:10px;font-weight:800;letter-spacing:.15em}.assign-customer-hero h1{margin:5px 0;color:#1a2944;font-size:28px}.assign-customer-hero p{margin:0;color:#6e7b90;font-size:14px}.assign-customer-hero a{color:#6b57d8;text-decoration:none}
+    .assign-customer-hint{display:flex;gap:10px;align-items:flex-start;padding:13px 15px;border:1px solid #dce8f0;border-radius:11px;background:#f4fafc;color:#496176;font-size:13px;line-height:1.55}.assign-customer-hint span{color:#168b85;font-size:16px}
+    .assign-customer-card{overflow:hidden;border:1px solid #e2e5ed;border-radius:15px;background:#fff;box-shadow:0 8px 24px #2636550a}
+    .assign-customer-card header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 20px;border-bottom:1px solid #e9ecf2;background:linear-gradient(110deg,#fff,#faf9ff)}
+    .assign-customer-card h2{margin:0;color:#25334c;font-size:17px}.assign-customer-count{padding:5px 9px;border-radius:999px;background:#f1efff;color:#6255c8;font-size:11px;font-weight:750;white-space:nowrap}
+    .assign-customer-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:16px;max-height:480px;overflow:auto}
+    .assign-customer-option{display:flex;align-items:center;gap:11px;min-width:0;margin:0;padding:12px;border:1px solid #e5e8ef;border-radius:11px;background:linear-gradient(120deg,#fff,#fafbfd);cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+    .assign-customer-option:hover{transform:translateY(-1px);border-color:#b7b0ea;background:#fcfbff}
+    .assign-customer-option:has(input:checked){border-color:#9c90e9;background:#f5f3ff}
+    .assign-customer-option input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:#6857d6}
+    .assign-customer-option>span{display:grid;gap:3px;min-width:0}.assign-customer-option strong{overflow:hidden;color:#27364d;font-size:13px;text-overflow:ellipsis;white-space:nowrap}.assign-customer-option small{overflow:hidden;color:#8290a2;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+    .assign-customer-empty{padding:28px;color:#738196;font-size:13px;text-align:center}
+    .assign-customer-actions{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border-top:1px solid #ebedf2;background:#fbfcfe}.assign-customer-actions a{color:#68758a;font-size:13px;font-weight:600;text-decoration:none}.assign-customer-actions a:hover{text-decoration:underline}.assign-customer-actions .button{min-width:150px}
+    @@media(max-width:640px){.assign-customer-list{grid-template-columns:1fr;max-height:380px}.assign-customer-hero{padding:19px}.assign-customer-hero h1{font-size:24px}.assign-customer-actions{align-items:stretch;flex-direction:column-reverse}.assign-customer-actions .button{width:100%}}
+</style>
+
+<main class="assign-customer-page">
+    <a class="assign-customer-back" asp-action="Details" asp-route-id="@Model.Staff.Id">← Back to @Model.Staff.Name</a>
+    <header class="assign-customer-hero">
+        <span class="assign-customer-kicker">AGENT ASSIGNMENTS</span>
+        <h1>Assign Customers</h1>
+        <p>@Model.Staff.Name <span aria-hidden="true">·</span> <a href="mailto:@Model.Staff.Email">@Model.Staff.Email</a></p>
+    </header>
+    <div class="assign-customer-hint"><span aria-hidden="true">ⓘ</span><div>Select the customers this agent supports. Existing support levels stay as they are; newly assigned customers use Frontline support.</div></div>
+
+    <form asp-action="AssignCustomers" asp-route-id="@Model.Staff.Id" method="post" class="assign-customer-card">
+        <div asp-validation-summary="All" class="validation" role="alert"></div>
+        <header><h2>Customer List</h2><span class="assign-customer-count" data-selected-count>@Model.SelectedClientIds.Count selected</span></header>
+        @if (Model.Customers.Count == 0) { <p class="assign-customer-empty">No customers are available yet.</p> }
+        else {
+            <div class="assign-customer-list">
+                @foreach (var customer in Model.Customers) {
+                    <label class="assign-customer-option"><input type="checkbox" name="SelectedClientIds" value="@customer.Id" checked="@Model.SelectedClientIds.Contains(customer.Id)" /><span><strong>@customer.Name</strong><small>@customer.Email</small></span></label>
+                }
+            </div>
+        }
+        <div class="assign-customer-actions"><a asp-action="Details" asp-route-id="@Model.Staff.Id">Cancel</a><button type="submit" class="button">Save Assignments</button></div>
+    </form>
+</main>
+
+<script>
+    (() => {
+        const count = document.querySelector('[data-selected-count]');
+        const checkboxes = [...document.querySelectorAll('.assign-customer-option input')];
+        const updateCount = () => count.textContent = `${checkboxes.filter(item => item.checked).length} selected`;
+        checkboxes.forEach(item => item.addEventListener('change', updateCount));
+    })();
+</script>

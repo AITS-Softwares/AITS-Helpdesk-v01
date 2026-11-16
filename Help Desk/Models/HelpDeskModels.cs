@@ -13,8 +13,9 @@ public class Client
 {
     public int Id { get; set; }
     [Required, StringLength(120)] public string Name { get; set; } = "";
-    [Required, EmailAddress, StringLength(160)] public string Email { get; set; } = "";
-    [StringLength(2000)] public string EmailDomains { get; set; } = "";
+    [Required, StringLength(160)] public string Email { get; set; } = "";
+    [StringLength(30)] public string? GstNumber { get; set; }
+    [StringLength(2000), ValidateNever] public string EmailDomains { get; set; } = "";
     [StringLength(40)] public string? Phone { get; set; }
 }
 public class CompanyProject
@@ -31,6 +32,13 @@ public class StaffProject
     public int ProjectId { get; set; }
     [ValidateNever, JsonIgnore] public AitsStaffUser? Staff { get; set; }
     [ValidateNever, JsonIgnore] public CompanyProject? Project { get; set; }
+}
+public class CustomerAgent
+{
+    public int ClientId { get; set; }
+    public int StaffId { get; set; }
+    [ValidateNever, JsonIgnore] public Client? Client { get; set; }
+    [ValidateNever, JsonIgnore] public AitsStaffUser? Staff { get; set; }
 }
 public abstract class DeskUser
 {
@@ -73,6 +81,7 @@ public class Ticket
     [EnumDataType(typeof(TicketSeverity))] public TicketSeverity Severity { get; set; } = TicketSeverity.Medium;
     public int? ProjectId { get; set; }
     [StringLength(320)] public string? SourceEmailMessageId { get; set; }
+    [StringLength(320)] public string? EmailThreadMessageId { get; set; }
     [ValidateNever, JsonIgnore] public CompanyProject? Project { get; set; }
     [ValidateNever, JsonIgnore] public Client? Client { get; set; }
     [ValidateNever, JsonIgnore] public ClientDeskUser? Requester { get; set; }
@@ -103,6 +112,8 @@ public class TicketAttachment
     [JsonIgnore] public byte[] Data { get; set; } = [];
     [StringLength(255)] public string FileName { get; set; } = "";
     [StringLength(160)] public string ContentType { get; set; } = "application/octet-stream";
+    public int? CommentId { get; set; }
+    [ValidateNever, JsonIgnore] public TicketComment? Comment { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
 public class TicketAttachmentInfo
@@ -111,6 +122,7 @@ public class TicketAttachmentInfo
     public string FileName { get; set; } = "";
     public string ContentType { get; set; } = "application/octet-stream";
     public DateTime UploadedAt { get; set; }
+    public int? CommentId { get; set; }
 }
 public class TicketPhoto
 {
@@ -123,6 +135,7 @@ public class TicketPhoto
 }
 public class TicketComment
 {
+    public List<TicketAttachment> Attachments { get; set; } = [];
     [StringLength(320)] public string? SourceEmailMessageId { get; set; }
     [StringLength(80)] public string? AuthorName { get; set; }
     [StringLength(20)] public string? AuthorRole { get; set; }
@@ -156,7 +169,7 @@ public class TicketListViewModel
 public class StaffProjectsViewModel
 {
     [ValidateNever] public DeskUser Staff { get; set; } = new AitsStaffUser();
-    [ValidateNever] public List<CompanyProject> Projects { get; set; } = [];
+    [ValidateNever] public List<Client> Customers { get; set; } = [];
     public List<int> SelectedClientIds { get; set; } = [];
 }
 

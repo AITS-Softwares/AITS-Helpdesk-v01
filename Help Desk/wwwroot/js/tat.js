@@ -26,7 +26,7 @@
             if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return;
             const result = await response.json();
             panel.hidden = result.count === 0;
-            panel.querySelector('[data-tat-alert-title]').textContent = `${result.count} ticket(s) missed the TAT deadline`;
+            panel.querySelector('[data-tat-alert-title]').textContent = `${result.count} TAT breaches`;
             const container = panel.querySelector('[data-tat-alert-items]');
             const fragment = document.createDocumentFragment();
             for (const ticket of result.tickets) {

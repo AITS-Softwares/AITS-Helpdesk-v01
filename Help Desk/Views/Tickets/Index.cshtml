@@ -630,7 +630,7 @@
     @@media (min-width: 64rem) {
         .tk-list-head {
             display: grid;
-            grid-template-columns: 5.5rem minmax(12rem, 2fr) minmax(9rem, 1.2fr) minmax(8rem, .9fr) minmax(16rem, 1.55fr) minmax(8rem, .8fr);
+            grid-template-columns: 5rem minmax(10rem, 1.8fr) minmax(7rem, 1.1fr) minmax(7rem, .9fr) minmax(9rem, 1.15fr) minmax(10rem, 1.5fr) minmax(7rem, .8fr);
             gap: 0.5rem 1.25rem;
             padding: 0.6rem 1.25rem 0.6rem 1.4rem;
             margin-bottom: 0.15rem;
@@ -644,7 +644,7 @@
 
         .tk-grid.is-list .tk-card {
             display: grid;
-            grid-template-columns: 5.5rem minmax(12rem, 2fr) minmax(9rem, 1.2fr) minmax(8rem, .9fr) minmax(16rem, 1.55fr) minmax(8rem, .8fr);
+            grid-template-columns: 5rem minmax(10rem, 1.8fr) minmax(7rem, 1.1fr) minmax(7rem, .9fr) minmax(9rem, 1.15fr) minmax(10rem, 1.5fr) minmax(7rem, .8fr);
             align-items: center;
             gap: 0.5rem 1.25rem;
             min-height: 4.6rem;
@@ -739,8 +739,9 @@
             }
 
         .tk-grid.is-list .tk-date {
+            min-width: 0;
             font-size: 0.74rem;
-            text-align: right;
+            text-align: left;
             white-space: nowrap;
             color: var(--muted);
         }
@@ -840,9 +841,21 @@
             transition: none !important;
         }
     }
+    .tk-working-agent{min-width:0;font-size:.78rem;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+    .tk-assignment{max-width:10rem}
+    .tk-assignment select{max-width:9.5rem}
+    .tk-grid.is-list .tk-working-agent{font-size:.76rem}
+    .tk-grid.is-list .tk-assignment{margin-left:0;max-width:10rem}
+    .tk-current-owner{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tk-assignment{width:auto;max-width:9rem;flex:none;margin:0;padding:0;border:0;border-radius:0;background:transparent}
+    .tk-assignment select,.tk-grid.is-list .tk-agent .tk-assignment select,.tk-grid.is-list .tk-assignment select{width:8.5rem;max-width:8.5rem;min-width:0;min-height:2.25rem;flex:none;padding:.35rem .55rem;border:1px solid var(--line);border-radius:.5rem;background:var(--surface);font-size:.78rem;text-overflow:ellipsis}
+    .tk-grid.is-list .tk-agent{border:0;background:transparent;padding:0}
+    .tk-grid.is-list .tk-agent .tk-assignment{width:auto;max-width:9rem;flex:none;border:0;background:transparent;padding:0}
+    .tk-grid.is-list .tk-assignment{margin-left:0;max-width:9rem;width:auto}
+    @@media (min-width:64rem){.tk-page:not(.is-admin) .tk-list-head,.tk-page:not(.is-admin) .tk-grid.is-list .tk-card{grid-template-columns:5rem minmax(10rem,1.8fr) minmax(7rem,1.1fr) minmax(7rem,.9fr) minmax(10rem,1.5fr) minmax(7rem,.8fr)}}
 </style>
 
-<div class="tk-page">
+<div class="tk-page @(User.IsInRole("Admin") ? "is-admin" : "is-agent")">
 
     <header class="tk-hero">
         <div class="tk-hero-top">
@@ -913,7 +926,8 @@
                 <span>Subject</span>
                 <span>Customer</span>
                 <span>Priority / Level</span>
-                <span>Assignee</span>
+                @if (User.IsInRole("Admin")) { <span>Assign Tickets</span> }
+                <span>Working Agent</span>
                 <span>Updated</span>
             </div>
 
@@ -922,7 +936,6 @@
                 {
                     var customerName = Model.Clients.Find(c => c.Id == ticket.ClientId)?.Name;
                     var agentName = Model.Users.Find(u => u.Id == ticket.AssigneeId)?.Name;
-                    var agentInitial = string.IsNullOrWhiteSpace(agentName) ? "–" : agentName.Trim().Substring(0, 1).ToUpper();
                     var eligibleAgents = ((IEnumerable<StaffProject>)ViewBag.StaffMemberships)
                     .Where(m => m.ProjectId == ticket.ProjectId && m.SupportLevel == ticket.SupportLevel && m.Project?.ClientId == ticket.ClientId)
                     .Select(m => Model.Users.FirstOrDefault(u => u.Id == m.StaffId))
@@ -951,12 +964,11 @@
                         </div>
 
                         <div class="tk-card-foot">
+                            @if (User.IsInRole("Admin")) {
                             <div class="tk-agent">
-                                <span class="tk-avatar @(agentName is null ? "is-none" : "")" aria-hidden="true">@agentInitial</span>
-                                <span class="@(agentName is null ? "tk-muted" : "")">@(agentName ?? "Unassigned")</span>
-                                @if (User.IsInRole("Admin") && ticket.Status is not (TicketStatus.Resolved or TicketStatus.Closed))
+                                @if (ticket.Status is not (TicketStatus.Resolved or TicketStatus.Closed))
                                 {
-                                    <form asp-action="Assign" method="post" class="tk-assignment" aria-label="Assign ticket #@ticket.Id.ToString("D4")">
+                                    <form asp-action="Assign" method="post" class="tk-assignment" aria-label="Assign ticket #@ticket.Id.ToString("D4")" data-auto-assign>
                                         <input type="hidden" name="id" value="@ticket.Id" />
                                         <input type="hidden" name="search" value="@Model.Search" />
                                         <input type="hidden" name="status" value="@Model.Status" />
@@ -970,11 +982,12 @@
                                                 <option value="@agent.Id" selected="@(ticket.AssigneeId == agent.Id)">@agent.Name</option>
                                             }
                                         </select>
-                                        <button type="submit">Assign</button>
                                     </form>
                                 }
                             </div>
-                            <span class="tk-date">@ticket.UpdatedAt.ToString("dd MMM yyyy, HH:mm") UTC</span>
+                            }
+                            <span class="tk-working-agent">@(ticket.Status == TicketStatus.InProgress && ticket.WorkStartedAt.HasValue ? agentName ?? "NA" : "NA")</span>
+                            <span class="tk-date">@Help_Desk.Services.TicketTiming.ToIndiaTime(ticket.UpdatedAt).ToString("dd MMM, hh:mm tt")</span>
                         </div>
                     </article>
                 }
@@ -990,6 +1003,10 @@
 
 @section Scripts {
     <script>
+        document.querySelectorAll("form[data-auto-assign] select[name='assigneeId']").forEach(select => {
+            select.addEventListener("change", () => select.form.requestSubmit());
+        });
+
         const priorityFilter = document.getElementById('Priority');
         function updatePriorityColor() { priorityFilter.dataset.priority = priorityFilter.value; }
         priorityFilter.addEventListener('change', updatePriorityColor);
@@ -1021,3 +1038,5 @@
         })();
     </script>
 }
+
+

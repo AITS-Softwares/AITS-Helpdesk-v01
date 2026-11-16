@@ -2,6 +2,7 @@ using Help_Desk.Models;
 namespace Help_Desk.Services;
 public static class TicketTiming
 {
+    public static DateTime ToIndiaTime(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).AddHours(5).AddMinutes(30);
     public static int TargetHours(TicketPriority priority) => priority switch {
         TicketPriority.Low => 72, TicketPriority.Medium => 24, TicketPriority.High => 8, TicketPriority.Urgent => 4, _ => 24
     };

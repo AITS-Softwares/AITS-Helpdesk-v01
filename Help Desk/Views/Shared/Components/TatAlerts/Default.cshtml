@@ -1,7 +1,7 @@
 @model Help_Desk.Services.TatAlertSnapshot
-<section class="tat-alert-panel" data-tat-alerts data-endpoint="@Url.Action("TatAlerts", "Tickets")" hidden="@(Model.Count == 0)" aria-label="Overdue ticket alerts">
-    <div class="tat-alert-heading"><span class="tat-alert-icon" aria-hidden="true">!</span><div><strong data-tat-alert-title>@Model.Count ticket(s) missed the TAT deadline</strong><p>@(User.IsInRole("Admin") ? "These unresolved tickets need agent attention." : "Your assigned tickets need attention. Open a ticket to update its progress.")</p></div><span class="badge tat-overdue">TAT breached</span></div>
-    <div class="tat-alert-items" data-tat-alert-items>@foreach (var ticket in Model.Tickets) { <a href="@Url.Action("Details", "Tickets", new { id = ticket.Id })"><strong>#@ticket.Id.ToString("D4")</strong><span>@ticket.Title</span><small>View ticket →</small></a> }</div>
-    <p class="tat-alert-footer">Showing the earliest @Model.Tickets.Count overdue tickets · Checks every 30 seconds while this page is open.</p>
-</section>
+<details class="tat-alert-panel" data-tat-alerts data-endpoint="@Url.Action("TatAlerts", "Tickets")" hidden="@(Model.Count == 0)" aria-label="Overdue ticket alerts">
+    <summary class="tat-alert-summary" title="Open TAT breach notifications"><span class="tat-alert-icon" aria-hidden="true">!</span><strong data-tat-alert-title>@Model.Count TAT breaches</strong><span class="tat-alert-action">View <span aria-hidden="true">⌄</span></span></summary>
+    <div class="tat-alert-content"><div class="tat-alert-items" data-tat-alert-items>@foreach (var ticket in Model.Tickets) { <a href="@Url.Action("Details", "Tickets", new { id = ticket.Id })"><strong>#@ticket.Id.ToString("D4")</strong><span>@ticket.Title</span><small>Open ticket →</small></a> }</div>
+    <p class="tat-alert-footer">Showing the earliest @Model.Tickets.Count overdue tickets · Updates every 30 seconds.</p></div>
+</details>
 <span class="tat-live-announcement" data-tat-announcement role="status" aria-live="polite" aria-atomic="true"></span>

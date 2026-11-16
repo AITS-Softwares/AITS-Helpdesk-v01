@@ -1,14 +1,24 @@
 @model List<DeskAccount>
 @{
     var directory = (List<DeskUser>)ViewBag.DirectoryUsers;
+    var companies = (List<Client>)ViewBag.Companies;
+    var companyByName = companies.ToDictionary(company => company.Name, company => company, StringComparer.OrdinalIgnoreCase);
     var projects = (Dictionary<int, List<string>>)ViewBag.StaffProjects;
     var rows = directory
         .Select(u => new AccountDirectoryRow { User = u, Account = Model.FirstOrDefault(a => a.DeskUserId == u.Id) })
         .Concat(Model.Where(a => a.DeskUserId == null).Select(a => new AccountDirectoryRow { Account = a }))
         .OrderBy(r => r.Name)
         .ToList();
-    var clients = (bool)ViewBag.ClientAccounts;
-    ViewData["Title"] = clients ? "Customer sign-in accounts" : "Admin / Agent sign-in accounts";
+    var filterName = (string?)ViewBag.FilterName ?? "";
+    var filterEmail = (string?)ViewBag.FilterEmail ?? "";
+    var filterCustomerId = (int?)ViewBag.FilterCustomerId;
+    rows = rows.Where(row =>
+        (string.IsNullOrWhiteSpace(filterName) || row.Name.Contains(filterName, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(filterEmail) || (row.User?.Email ?? row.Account?.Email ?? "").Contains(filterEmail, StringComparison.OrdinalIgnoreCase)) &&
+        (!filterCustomerId.HasValue || row.User is not null && projects.TryGetValue(row.User.Id, out var assignedCustomers) && assignedCustomers.Any(customerName => companyByName.TryGetValue(customerName, out var customer) && customer.Id == filterCustomerId.Value)))
+        .ToList();
+    var clients = false;
+    ViewData["Title"] = "Agent Accounts";
 }
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -217,33 +227,46 @@
 
     .ad-filters {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
-        gap: 0.6rem;
+        gap: 0.45rem;
         margin-bottom: 1.1rem;
     }
 
-        .ad-filters select {
+        .ad-filters select,
+        .ad-filters input {
             font: inherit;
             color: var(--text);
             background: #fff;
             border: 1.5px solid var(--line);
             border-radius: 0.6rem;
-            min-height: 2.6rem;
-            padding: 0.4rem 0.8rem;
-            min-width: min(100%, 16rem);
+            min-height: 2.25rem;
+            padding: 0.3rem 0.65rem;
+            width: min(100%, 17rem);
+            min-width: 12rem;
         }
 
-            .ad-filters select:focus-visible {
+        .ad-filters input { min-width: 10rem; }
+
+        .ad-filters .ad-btn { min-height: 2.25rem; padding: 0.3rem 0.8rem; font-size: 0.84rem; }
+
+            .ad-filters select:focus-visible,
+            .ad-filters input:focus-visible {
                 outline: none;
                 border-color: var(--teal);
                 box-shadow: 0 0 0 3px rgba(15, 123, 138, 0.22);
             }
 
+    @@media (max-width: 64rem) {
+        .ad-filters { flex-wrap: wrap; }
+        .ad-filters select, .ad-filters input { flex: 1 1 12rem; }
+    }
+
     .ad-reset {
         color: var(--teal-dark);
         font-weight: 600;
-        font-size: 0.9rem;
+        font-size: 0.84rem;
+        white-space: nowrap;
         text-underline-offset: 3px;
     }
 
@@ -258,7 +281,7 @@
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
-        font-size: 0.92rem;
+        font-size: 1rem;
     }
 
         .account-directory-table th:nth-child(1) { width: 18%; }
@@ -361,10 +384,30 @@
 
     .ad-actions {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
-        gap: 0.35rem;
+        gap: 0.2rem;
     }
+
+    .ad-action-menu { position:relative; }
+    .ad-action-menu>summary { display:grid; place-items:center; width:1.9rem; height:1.9rem; border:1px solid var(--line); border-radius:.5rem; color:var(--teal-dark); background:#fff; cursor:pointer; list-style:none; font-size:1.2rem; line-height:1; }
+    .ad-action-menu>summary::-webkit-details-marker { display:none; }
+    .ad-action-menu[open]>summary { background:var(--tint); }
+    .ad-action-menu-panel { position:static; min-width:190px; margin-top:.35rem; padding:.45rem; border:1px solid var(--line); border-radius:.7rem; background:#fff; box-shadow:0 6px 16px #14263a12; }
+    .ad-action-menu-panel .ad-actions { display:grid; grid-template-columns:1fr; align-items:stretch; gap:.25rem; }
+    .ad-action-menu-panel .ad-actions>* { width:100%; }
+    .ad-action-menu-panel .ad-actions form { display:block; }
+    .ad-action-menu-panel .ad-action-icon { display:flex!important; justify-content:flex-start; gap:.55rem; width:100%; min-width:0; height:auto; min-height:2.15rem; padding:.4rem .55rem!important; text-align:left; }
+    .ad-action-menu-panel .ad-action-icon svg { flex:0 0 14px; }
+    .ad-action-menu-panel .ad-action-icon span { position:static; width:auto; height:auto; margin:0; overflow:visible; clip:auto; white-space:nowrap; border:0; }
+    .ad-cell-actions { min-width:175px; white-space:nowrap; }
+    .ad-action-icon { display:inline-grid!important; place-items:center; flex:0 0 1.9rem; width:1.9rem; min-width:1.9rem; height:1.9rem; min-height:1.9rem; padding:.3rem!important; border-radius:7px!important; }
+    .ad-action-icon svg { width:14px; height:14px; }
+    .ad-action-icon span { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .ad-person-link { color:var(--ink); text-decoration:none; }
+    .ad-person-link:hover { color:var(--teal-dark); text-decoration:underline; }
+    .ad-chip[href] { color:var(--teal-dark); text-decoration:none; }
+    .ad-chip[href]:hover { background:var(--tint); text-decoration:underline; }
 
         .ad-actions form {
             margin: 0;
@@ -485,7 +528,7 @@
     <div class="ad-heading">
         <div>
             <h1>@ViewData["Title"]</h1>
-            <p>Administrators, agents, and customer access are separate.</p>
+            <p>Manage administrator and agent sign-in access.</p>
         </div>
         @if (!clients)
         {
@@ -548,26 +591,23 @@
     }
 
     <section class="ad-panel">
-        <nav class="ad-tabs" aria-label="Sign-in account groups">
-            <a asp-action="Index" class="@(!clients ? "is-active" : "")" aria-current="@(!clients ? "page" : null)">Admin / Agent accounts</a>
-            <a asp-action="Index" asp-route-clients="true" class="@(clients ? "is-active" : "")" aria-current="@(clients ? "page" : null)">Customer accounts</a>
+        <nav class="ad-tabs" aria-label="Sign-in account group">
+            <a asp-action="Index" class="is-active" aria-current="page">Admin / Agent accounts</a>
         </nav>
 
-        @if (clients)
-        {
-            <form method="get" class="ad-filters">
-                <input type="hidden" name="clients" value="true" />
-                <select name="clientId" aria-label="Customer">
-                    <option value="">All customers</option>
-                    @foreach (var customer in (List<Client>)ViewBag.Companies)
-                    {
-                        <option value="@customer.Id" selected="@(ViewBag.ClientId == customer.Id)">@customer.Name</option>
-                    }
-                </select>
-                <button type="submit" class="ad-btn">Filter</button>
-                <a class="ad-reset" asp-action="Index" asp-route-clients="true">Reset</a>
-            </form>
-        }
+        <form method="get" class="ad-filters" aria-label="Search agent accounts">
+            <input type="search" name="name" value="@filterName" placeholder="Filter by name" aria-label="Filter by name" />
+            <input type="search" name="email" value="@filterEmail" placeholder="Filter by email" aria-label="Filter by email" />
+            <select name="clientId" aria-label="Filter by customer">
+                <option value="">All customers</option>
+                @foreach (var customer in companies)
+                {
+                    <option value="@customer.Id" selected="@(filterCustomerId == customer.Id)">@customer.Name</option>
+                }
+            </select>
+            <button type="submit" class="ad-btn">Search</button>
+            <a class="ad-reset" asp-action="Index">Reset</a>
+        </form>
 
         <div class="ad-scroll">
             <table class="ad-table account-directory-table">
@@ -593,7 +633,8 @@
                             <td data-label="Name">
                                 <div class="ad-person">
                                     <span class="ad-avatar" aria-hidden="true">@initial</span>
-                                    <strong>@row.Name</strong>
+                                    @if (user is not null) { <a class="ad-person-link" asp-controller="Users" asp-action="Details" asp-route-id="@user.Id"><strong>@row.Name</strong></a> }
+                                    else { <strong>@row.Name</strong> }
                                 </div>
                             </td>
 
@@ -602,13 +643,14 @@
                             <td data-label="@(clients ? "Customer" : "Assigned customers")">
                                 @if (clients)
                                 {
-                                    @user?.Client?.Name
+                                    @if (user?.Client is not null) { <a asp-controller="Clients" asp-action="Details" asp-route-id="@user.ClientId">@user.Client.Name</a> }
                                 }
                                 else if (user is not null && projects.TryGetValue(user.Id, out var assignments))
                                 {
                                     @foreach (var project in assignments)
                                     {
-                                        <span class="ad-chip">@project</span>
+                                        @if (companyByName.TryGetValue(project, out var assignedCompany)) { <a class="ad-chip" asp-controller="Clients" asp-action="Details" asp-route-id="@assignedCompany.Id">@project</a> }
+                                        else { <span class="ad-chip">@project</span> }
                                     }
                                 }
                                 else
@@ -637,28 +679,30 @@
                             </td>
 
                             <td class="ad-cell-actions" data-label="Actions">
-                                <div class="ad-actions">
+                                <details class="ad-action-menu">
+                                    <summary title="Show account actions" aria-label="Show actions for @row.Name">⋮</summary>
+                                    <div class="ad-action-menu-panel"><div class="ad-actions">
                                     @if (user is not null)
                                     {
-                                        <a class="ad-link action-control" asp-controller="Users" asp-action="Edit" asp-route-id="@user.Id"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg><span>Edit</span></a>
+                                        <a class="ad-link action-control ad-action-icon" asp-controller="Users" asp-action="Edit" asp-route-id="@user.Id" title="Edit User" aria-label="Edit @user.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg><span>Edit</span></a>
                                         <form asp-controller="Users" asp-action="Delete" method="post" class="inline-delete-form" data-confirm-delete data-confirm-title="Delete user?" data-confirm-message="Delete @user.Name? This cannot be undone. Users referenced by tickets cannot be deleted.">
                                             <input type="hidden" name="id" value="@user.Id" />
-                                            <button class="ad-link is-danger action-control" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Delete</span></button>
+                                            <button class="ad-link is-danger action-control ad-action-icon" type="submit" title="Delete User" aria-label="Delete @user.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Delete</span></button>
                                         </form>
                                         @if (user is AitsStaffUser)
                                         {
-                                            <a class="ad-link" asp-controller="Users" asp-action="AssignCustomers" asp-route-id="@user.Id">Assign customers</a>
+                                            <a class="ad-link action-control ad-action-icon" asp-controller="Users" asp-action="AssignCustomers" asp-route-id="@user.Id" title="Assign Customers" aria-label="Assign customers for @user.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/><circle cx="8" cy="5" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="19" r="2"/></svg><span>Assign Customers</span></a>
                                         }
                                     }
 
                                     @if (account is null && user is not null)
                                     {
-                                        <a class="ad-link" asp-action="Create" asp-route-userId="@user.Id">Enable sign-in</a>
+                                        <a class="ad-link action-control ad-action-icon" asp-action="Create" asp-route-userId="@user.Id" title="Enable Sign-In" aria-label="Enable sign-in for @user.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9m-4 0 4 4m-8 1 4 4"/></svg><span>Enable Sign-In</span></a>
                                     }
 
                                     @if (account is not null)
                                     {
-                                        <a class="ad-link" asp-action="ResetPassword" asp-route-id="@account.Id">Reset password</a>
+                                        <a class="ad-link action-control ad-action-icon" asp-action="ResetPassword" asp-route-id="@account.Id" title="Reset Password" aria-label="Reset password for @row.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg><span>Reset Password</span></a>
 
                                         @if (account.Role != AccountRole.Admin)
                                         {
@@ -669,7 +713,7 @@
                                                 }
                                                 <input type="hidden" name="id" value="@account.Id" />
                                                 <input type="hidden" name="isActive" value="@(active ? "false" : "true")" />
-                                                <button type="submit" class="ad-link @(active ? "is-danger" : "")">@(active ? "Disable sign-in" : "Enable sign-in")</button>
+                                                <button type="submit" class="ad-link action-control ad-action-icon @(active ? "is-danger" : "")" title="@(active ? "Disable Sign-In" : "Enable Sign-In")" aria-label="@(active ? "Disable" : "Enable") sign-in for @row.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10m7.1-5a8 8 0 1 1-14.2 0"/></svg><span>@(active ? "Disable Sign-In" : "Enable Sign-In")</span></button>
                                             </form>
                                         }
 
@@ -677,11 +721,12 @@
                                         {
                                             <form asp-action="Approve" method="post">
                                                 <input type="hidden" name="id" value="@account.Id" />
-                                                <button type="submit" class="ad-btn is-small">Approve agent</button>
+                                                <button type="submit" class="ad-link action-control ad-action-icon" title="Approve Agent" aria-label="Approve @row.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Approve Agent</span></button>
                                             </form>
                                         }
                                     }
-                                </div>
+                                    </div></div>
+                                </details>
                             </td>
                         </tr>
                     }
@@ -691,7 +736,7 @@
 
         @if (!rows.Any())
         {
-            <p class="ad-empty">No users found. Add a customer user or agent to get started.</p>
+            <p class="ad-empty">No agents found. Add an agent account to get started.</p>
         }
     </section>
 

@@ -9,5 +9,5 @@
 <div class="tat-deadline" data-tat-cell data-due="@DateTime.SpecifyKind(due, DateTimeKind.Utc).ToString("O")" data-now="@now.ToString("O")" data-complete="@complete.ToString().ToLowerInvariant()">
     <span class="badge @(complete ? "status-inactive" : late ? "tat-overdue" : "status-active")" data-tat-label>@label</span>
     @if (!complete) { <strong data-tat-countdown>@Help_Desk.Services.TicketTiming.Duration(late ? now - due : due - now) @(late ? "overdue" : "left")</strong> }
-    <small>Due @due.ToString("dd MMM, HH:mm") UTC</small>
+    <small>Due @Help_Desk.Services.TicketTiming.ToIndiaTime(due).ToString("dd MMM, hh:mm tt") IST</small>
 </div>

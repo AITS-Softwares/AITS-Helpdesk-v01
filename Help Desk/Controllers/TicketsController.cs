@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Help_Desk.Controllers;
 
 [Authorize]
-public class TicketsController(HelpDeskDbContext db, CurrentAccess access, TicketCreatedEmails emails, TicketTatPolicy tatPolicy) : Controller
+public class TicketsController(HelpDeskDbContext db, CurrentAccess access, TicketCreatedEmails emails, TicketTatPolicy tatPolicy, TicketReplyEmails replyEmails) : Controller
 {
     [HttpGet, Authorize(Roles = "Admin,AitsUser")]
     public async Task<IActionResult> TatAlerts([FromServices] TatAlerts alerts, CancellationToken cancellationToken)
@@ -36,7 +36,8 @@ public class TicketsController(HelpDeskDbContext db, CurrentAccess access, Ticke
             else if (scope.StartsWith("project:") && int.TryParse(scope[8..], out var project)) projectId = project;
         }
         ViewBag.Scope = projectId.HasValue ? $"project:{projectId}" : clientId.HasValue ? $"company:{clientId}" : "";
-        ViewBag.StaffMemberships = await db.StaffProjects.AsNoTracking().Include(m => m.Project).Where(m => m.Staff!.IsActive).ToListAsync();
+        ViewBag.StaffMemberships = await db.StaffProjects.AsNoTracking().Include(m => m.Project).Where(m => m.Staff!.IsActive &&
+            db.InternalAccounts.Any(a => a.DeskUserId == m.StaffId && a.Role == AccountRole.AitsUser && a.IsApproved && a.IsActive && a.Email == m.Staff.Email)).ToListAsync();
         var tickets = access.Tickets.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -160,7 +161,11 @@ public class TicketsController(HelpDeskDbContext db, CurrentAccess access, Ticke
         var queuedEmails = existing is null ? await emails.QueueAsync(entity) : 0;
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateException) { ModelState.AddModelError("", "Unable to save. A selected customer or user may have changed. Reload and try again."); await LoadOptions(ticket.Id); return View("Edit", ticket); }
-        TempData["Message"] = queuedEmails > 0 ? $"Ticket saved. Email notifications queued for {queuedEmails} assigned agent{(queuedEmails == 1 ? "" : "s")}." : "Ticket saved successfully.";
+        TempData["Message"] = existing is null
+            ? queuedEmails > 0
+                ? $"New ticket #{entity.Id:D4} created. Email notifications queued for {queuedEmails} assigned agent{(queuedEmails == 1 ? "" : "s")}."
+                : $"New ticket #{entity.Id:D4} created successfully."
+            : "Ticket saved successfully.";
         return RedirectToAction(nameof(Details), new { id = entity.Id });
     }
     public async Task<IActionResult> Details(int id)
@@ -170,10 +175,17 @@ public class TicketsController(HelpDeskDbContext db, CurrentAccess access, Ticke
         ViewBag.EmailNotifications = access.IsAdmin
             ? await db.TicketEmailNotifications.AsNoTracking().Where(n => n.TicketId == id).OrderBy(n => n.Id).ToListAsync()
             : new List<TicketEmailNotification>();
-        ViewBag.Activities = await db.TicketActivities.AsNoTracking().Where(a => a.TicketId == id).OrderBy(a => a.CreatedAt).ThenBy(a => a.Id).ToListAsync();
         ViewBag.Escalations = await db.TicketEscalations.AsNoTracking().Include(e => e.Staff).Where(e => e.TicketId == id).OrderBy(e => e.CreatedAt).ToListAsync();
         ViewBag.Attachments = await db.TicketAttachments.AsNoTracking().Where(a => a.TicketId == id)
-            .OrderBy(a => a.UploadedAt).Select(a => new TicketAttachmentInfo { Id = a.Id, FileName = a.FileName, ContentType = a.ContentType, UploadedAt = a.UploadedAt }).ToListAsync();
+            .OrderBy(a => a.UploadedAt).Select(a => new TicketAttachmentInfo { Id = a.Id, FileName = a.FileName, ContentType = a.ContentType, UploadedAt = a.UploadedAt, CommentId = a.CommentId }).ToListAsync();
+        ViewBag.AssignableStaff = ticket.ProjectId.HasValue
+            ? await db.AitsStaff.AsNoTracking().Where(staff => staff.IsActive &&
+                db.StaffProjects.Any(m => m.StaffId == staff.Id && m.ProjectId == ticket.ProjectId && m.Project!.ClientId == ticket.ClientId) &&
+                db.InternalAccounts.Any(a => a.DeskUserId == staff.Id && a.Role == AccountRole.AitsUser && a.IsApproved && a.IsActive && a.Email == staff.Email))
+                .OrderBy(staff => db.StaffProjects.Where(m => m.StaffId == staff.Id && m.ProjectId == ticket.ProjectId)
+                    .Select(m => (int?)m.SupportLevel).FirstOrDefault() ?? 4)
+                .ThenBy(staff => staff.Name).ToListAsync()
+            : new List<AitsStaffUser>();
         await LoadOptions(ticket.Id); return View(ticket);
     }
     [Authorize(Roles = "Admin"), HttpPost, ValidateAntiForgeryToken]
@@ -207,44 +219,58 @@ public class TicketsController(HelpDeskDbContext db, CurrentAccess access, Ticke
         Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
         return File(attachment.Data, attachment.ContentType, attachment.FileName);
     }
-    [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Comment(int id, string? body)
+    public async Task<IActionResult> AttachmentPreview(int id)
     {
-        var ticket = await access.Tickets.SingleOrDefaultAsync(t => t.Id == id);
-        if (ticket is null) return NotFound();
-        if (string.IsNullOrWhiteSpace(body) || body.Length > 3000) { TempData["Error"] = "Enter a comment between 1 and 3,000 characters."; return RedirectToAction(nameof(Details), new { id }); }
-        db.Comments.Add(new TicketComment { TicketId = id, Body = body.Trim(), AuthorName = User.Identity?.Name, AuthorRole = access.IsAdmin ? "Admin" : access.IsInternal ? "AITS staff" : "Client user" });
-        ticket.UpdatedAt = DateTime.UtcNow;
-        try { await db.SaveChangesAsync(); }
-        catch (DbUpdateException) { TempData["Error"] = "The comment could not be saved. The ticket may have been removed."; }
-        return RedirectToAction(nameof(Details), new { id });
+        if (!await access.Tickets.AnyAsync(ticket => ticket.Attachments.Any(attachment => attachment.Id == id))) return NotFound();
+        var attachment = await db.TicketAttachments.AsNoTracking().SingleOrDefaultAsync(file => file.Id == id);
+        if (attachment is null) return NotFound();
+        var previewTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf" };
+        if (!previewTypes.Contains(attachment.ContentType, StringComparer.OrdinalIgnoreCase)) return BadRequest();
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+        return File(attachment.Data, attachment.ContentType);
     }
-    [Authorize(Roles = "AitsUser"), HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Escalate(int id, SupportLevel level, string? reason)
+    [HttpPost, ValidateAntiForgeryToken, RequestSizeLimit(26 * 1024 * 1024), RequestFormLimits(MultipartBodyLengthLimit = 26 * 1024 * 1024)]
+    public async Task<IActionResult> Comment(int id, string? body, IFormFile[]? files)
     {
-        var ticket = await access.Tickets.SingleOrDefaultAsync(t => t.Id == id);
+        var ticket = await access.Tickets.Include(t => t.Requester).Include(t => t.Client).SingleOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
-        if (!Enum.IsDefined(level) || level <= ticket.SupportLevel || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000) {
-            TempData["Error"] = "Choose a higher support level and enter a reason (up to 1,000 characters).";
+        files ??= [];
+        var uploads = files.Where(file => file.Length > 0).ToList();
+        if (string.IsNullOrWhiteSpace(body) && uploads.Count == 0 || body?.Length > 3000) {
+            TempData["Error"] = "Write a reply or attach a file. Replies can be up to 3,000 characters.";
             return RedirectToAction(nameof(Details), new { id });
         }
-        if (ticket.Status is TicketStatus.Resolved or TicketStatus.Closed) {
-            TempData["Error"] = "A resolved or closed ticket cannot be escalated.";
+        if (uploads.Count > 10 || uploads.Any(file => file.Length > 10 * 1024 * 1024) || uploads.Sum(file => file.Length) > 25 * 1024 * 1024) {
+            TempData["Error"] = "Attach up to 10 files, with a 10 MB per-file and 25 MB total limit.";
             return RedirectToAction(nameof(Details), new { id });
         }
-        if (ticket.AssigneeId.HasValue && ticket.AssigneeId != access.UserId) return Forbid();
-        if (!await db.StaffProjects.AnyAsync(m => m.ProjectId == ticket.ProjectId && m.SupportLevel == level && m.Staff!.IsActive)) {
-            TempData["Error"] = "No active team members are assigned to that level. Contact Admin.";
-            return RedirectToAction(nameof(Details), new { id });
+        var reply = body?.Trim() ?? "";
+        var comment = new TicketComment { TicketId = id, Body = reply, AuthorName = User.Identity?.Name, AuthorRole = access.IsAdmin ? "Admin" : access.IsInternal ? "AITS staff" : "Customer user" };
+        foreach (var file in uploads) {
+            await using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, HttpContext.RequestAborted);
+            var fileName = Path.GetFileName(file.FileName.Replace('\\', '/'));
+            if (string.IsNullOrWhiteSpace(fileName)) fileName = "attachment";
+            if (fileName.Length > 255) fileName = fileName[^255..];
+            var contentType = string.IsNullOrWhiteSpace(file.ContentType) || file.ContentType.Length > 160 ? "application/octet-stream" : file.ContentType;
+            comment.Attachments.Add(new TicketAttachment { TicketId = id, FileName = fileName, ContentType = contentType, Data = stream.ToArray() });
         }
-        var previous = ticket.SupportLevel;
-        // Optimistic concurrency protects the owner and current routing level during handover.
-        ticket.SupportLevel = level; ticket.AssigneeId = null; ticket.SupportLevelStartedAt = DateTime.UtcNow; ticket.UpdatedAt = DateTime.UtcNow;
-        db.TicketEscalations.Add(new TicketEscalation { TicketId = id, StaffId = access.UserId, FromLevel = previous, ToLevel = level, Reason = reason.Trim() });
-        db.TicketActivities.Add(new TicketActivity { TicketId = id, ActorName = User.Identity?.Name ?? "AITS staff", Message = $"Escalated from {previous} to {level}. Waiting for the {level} team to take ownership." });
-        await emails.QueueAsync(ticket);
-        try { await db.SaveChangesAsync(); TempData["Message"] = $"Ticket escalated to {level}. The next team can take ownership."; }
-        catch (DbUpdateException) { TempData["Error"] = "The ticket or customer agent access changed during escalation. Refresh and try again."; }
+        db.Comments.Add(comment);
+        ticket.UpdatedAt = DateTime.UtcNow;
+        try {
+            await db.SaveChangesAsync();
+            if (access.IsInternal || access.IsAdmin) {
+                var sentMessageId = await replyEmails.SendToRequesterAsync(ticket, reply, comment.Attachments, HttpContext.RequestAborted);
+                if (sentMessageId is not null) {
+                    ticket.EmailThreadMessageId = sentMessageId;
+                    await db.SaveChangesAsync();
+                    TempData["Message"] = $"Reply sent to {ticket.Requester?.Email}.";
+                } else TempData["Message"] = "Reply saved. Email notifications are disabled in settings.";
+            } else TempData["Message"] = "Reply saved successfully.";
+        }
+        catch (DbUpdateException) { TempData["Error"] = "The comment could not be saved. The ticket may have been removed."; }
+        catch (Exception) { TempData["Error"] = "Reply saved, but the email could not be sent. Check the outgoing email settings and try again."; }
         return RedirectToAction(nameof(Details), new { id });
     }
     [Authorize(Roles = "AitsUser"), HttpPost, ValidateAntiForgeryToken]
@@ -252,15 +278,17 @@ public class TicketsController(HelpDeskDbContext db, CurrentAccess access, Ticke
     {
         var ticket = await access.Tickets.SingleOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
-        if (ticket.AssigneeId != access.UserId) return Forbid();
-        if (!((ticket.Status == TicketStatus.Open && status == TicketStatus.InProgress) || (ticket.Status == TicketStatus.InProgress && status == TicketStatus.Resolved)))
-            return BadRequest("Start work on an open ticket before marking it resolved.");
+        var canUpdateStatus = ticket.ProjectId.HasValue && await db.StaffProjects.AnyAsync(m => m.ProjectId == ticket.ProjectId && m.StaffId == access.UserId && m.Project!.ClientId == ticket.ClientId && m.Staff!.IsActive);
+        if (!canUpdateStatus) return Forbid();
+        if (!Enum.IsDefined(status)) return BadRequest("Choose a valid ticket status.");
         var now = DateTime.UtcNow;
+        var previous = ticket.Status;
         ticket.Status = status; ticket.UpdatedAt = now;
-        if (status == TicketStatus.InProgress) ticket.WorkStartedAt ??= now;
-        if (status == TicketStatus.Resolved) ticket.ClosedAt = now;
-        db.TicketActivities.Add(new TicketActivity { TicketId = id, ActorName = User.Identity?.Name ?? "AITS staff", Message = status == TicketStatus.InProgress ? "Started working on this ticket." : "Resolved this ticket." });
-        try { await db.SaveChangesAsync(); TempData["Message"] = status == TicketStatus.Resolved ? "Ticket resolved. The client can view the resolution time." : "Work started. The client can see your progress."; }
+        if (status == TicketStatus.InProgress && previous != TicketStatus.InProgress) ticket.WorkStartedAt = now;
+        else if (status == TicketStatus.Open) ticket.WorkStartedAt = null;
+        ticket.ClosedAt = status is TicketStatus.Resolved or TicketStatus.Closed ? now : null;
+        db.TicketActivities.Add(new TicketActivity { TicketId = id, ActorName = User.Identity?.Name ?? "AITS staff", Message = $"Status changed from {previous} to {status}." });
+        try { await db.SaveChangesAsync(); TempData["Message"] = $"Ticket status changed to {status}."; }
         catch (DbUpdateException) { TempData["Error"] = "The ticket changed. Refresh and try again."; }
         return RedirectToAction(nameof(Details), new { id });
     }
@@ -288,23 +316,65 @@ public class TicketsController(HelpDeskDbContext db, CurrentAccess access, Ticke
         return RedirectToAction(nameof(Details), new { id });
     }
     [Authorize(Roles = "Admin"), HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Assign(int id, int? assigneeId, string? search, TicketStatus? status, TicketPriority? priority, int? clientId, int? projectId)
+    public async Task<IActionResult> Assign(int id, int? assigneeId, string? search, TicketStatus? status, TicketPriority? priority, int? clientId, int? projectId, bool returnToDetails = false)
     {
         var ticket = await db.Tickets.SingleOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
         if (ticket.Status is TicketStatus.Resolved or TicketStatus.Closed) TempData["Error"] = "Reopen the ticket before changing its assignment.";
-        else if (assigneeId.HasValue && (!ticket.ProjectId.HasValue || !await db.StaffProjects.AnyAsync(m => m.StaffId == assigneeId && m.ProjectId == ticket.ProjectId && m.SupportLevel == ticket.SupportLevel && m.Project!.ClientId == ticket.ClientId && m.Staff!.IsActive &&
-                     db.InternalAccounts.Any(a => a.DeskUserId == m.StaffId && a.Role == AccountRole.AitsUser && a.IsApproved && a.IsActive && a.Email == m.Staff.Email))))
-            TempData["Error"] = $"Choose an active, approved agent assigned to this customer's {ticket.SupportLevel} team.";
         else {
-            ticket.AssigneeId = assigneeId;
-            ticket.UpdatedAt = DateTime.UtcNow;
-            var assigneeName = assigneeId.HasValue ? await db.AitsStaff.Where(s => s.Id == assigneeId).Select(s => s.Name).SingleAsync() : "Unassigned";
-            db.TicketActivities.Add(new TicketActivity { TicketId = ticket.Id, ActorName = User.Identity?.Name ?? "Admin", Message = $"Assigned ticket to {assigneeName}." });
-            try { await db.SaveChangesAsync(); TempData["Message"] = assigneeId.HasValue ? $"Ticket assigned to {assigneeName}." : "Ticket is now unassigned."; }
-            catch (DbUpdateException) { TempData["Error"] = "The ticket assignment could not be saved. Refresh and try again."; }
+            SupportLevel? destinationLevel = null;
+            if (assigneeId.HasValue && ticket.ProjectId.HasValue) {
+                destinationLevel = await db.StaffProjects.AsNoTracking()
+                    .Where(m => m.StaffId == assigneeId && m.ProjectId == ticket.ProjectId && m.Project!.ClientId == ticket.ClientId && m.Staff!.IsActive &&
+                        db.InternalAccounts.Any(a => a.DeskUserId == m.StaffId && a.Role == AccountRole.AitsUser && a.IsApproved && a.IsActive && a.Email == m.Staff.Email))
+                    .Select(m => (SupportLevel?)m.SupportLevel).SingleOrDefaultAsync();
+            }
+            if (assigneeId.HasValue && destinationLevel is null)
+                TempData["Error"] = "Choose an active, approved agent assigned to this customer's support team.";
+            else {
+                var previousAssigneeId = ticket.AssigneeId;
+                var previousLevel = ticket.SupportLevel;
+                var previousLevelChanged = destinationLevel.HasValue && destinationLevel.Value != previousLevel;
+                ticket.AssigneeId = assigneeId;
+                if (destinationLevel.HasValue) ticket.SupportLevel = destinationLevel.Value;
+                ticket.UpdatedAt = DateTime.UtcNow;
+                var assigneeName = assigneeId.HasValue ? await db.AitsStaff.Where(s => s.Id == assigneeId).Select(s => s.Name).SingleAsync() : "Unassigned";
+                if (previousAssigneeId != assigneeId || previousLevelChanged) {
+                    ticket.WorkStartedAt = null;
+                    if (ticket.Status == TicketStatus.InProgress) ticket.Status = TicketStatus.Open;
+                    var routeMessage = previousLevelChanged
+                        ? $"Ticket routed from {previousLevel} to {ticket.SupportLevel} and assigned to {assigneeName}."
+                        : $"Assigned ticket to {assigneeName}. Work is waiting to start under the new owner.";
+                    db.TicketActivities.Add(new TicketActivity { TicketId = ticket.Id, ActorName = User.Identity?.Name ?? "Admin", Message = routeMessage });
+                }
+                if (previousLevelChanged) await emails.QueueAsync(ticket);
+                try { await db.SaveChangesAsync(); TempData["Message"] = assigneeId.HasValue ? $"Ticket assigned to {assigneeName} ({ticket.SupportLevel})." : "Ticket is now unassigned."; }
+                catch (DbUpdateException) { TempData["Error"] = "The ticket assignment could not be saved. Refresh and try again."; }
+            }
         }
-        return RedirectToAction(nameof(Index), new { search, status, priority, clientId, projectId });
+        return returnToDetails ? RedirectToAction(nameof(Details), new { id }) : RedirectToAction(nameof(Index), new { search, status, priority, clientId, projectId });
+    }
+    [Authorize(Roles = "Admin"), HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetStatus(int id, TicketStatus status)
+    {
+        var ticket = await access.Tickets.SingleOrDefaultAsync(t => t.Id == id);
+        if (ticket is null) return NotFound();
+        if (!Enum.IsDefined(status)) {
+            TempData["Error"] = "Choose a valid ticket status.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        if (ticket.Status != status) {
+            var previous = ticket.Status;
+            var now = DateTime.UtcNow;
+            ticket.Status = status;
+            ticket.UpdatedAt = now;
+            ticket.ClosedAt = status is TicketStatus.Resolved or TicketStatus.Closed ? now : null;
+            if (status == TicketStatus.InProgress) ticket.WorkStartedAt ??= now;
+            db.TicketActivities.Add(new TicketActivity { TicketId = id, ActorName = User.Identity?.Name ?? "Admin", Message = $"Status changed from {previous} to {status}." });
+            try { await db.SaveChangesAsync(); TempData["Message"] = $"Ticket status changed to {status}."; }
+            catch (DbUpdateException) { TempData["Error"] = "The ticket status could not be saved. Refresh and try again."; }
+        }
+        return RedirectToAction(nameof(Details), new { id });
     }
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
