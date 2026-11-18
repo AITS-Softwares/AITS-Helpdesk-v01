@@ -1,7 +1,7 @@
 @model Help_Desk.Services.TatAlertSnapshot
 <details class="tat-alert-panel" data-tat-alerts data-endpoint="@Url.Action("TatAlerts", "Tickets")" hidden="@(Model.Count == 0)" aria-label="Overdue ticket alerts">
-    <summary class="tat-alert-summary" title="Open TAT breach notifications"><span class="tat-alert-icon" aria-hidden="true">!</span><strong data-tat-alert-title>@Model.Count TAT breaches</strong><span class="tat-alert-action">View <span aria-hidden="true">⌄</span></span></summary>
-    <div class="tat-alert-content"><div class="tat-alert-items" data-tat-alert-items>@foreach (var ticket in Model.Tickets) { <a href="@Url.Action("Details", "Tickets", new { id = ticket.Id })"><strong>#@ticket.Id.ToString("D4")</strong><span>@ticket.Title</span><small>Open ticket →</small></a> }</div>
+    <summary class="tat-alert-summary" title="Open TAT breach notifications" aria-label="@Model.Count TAT breach notifications"><span class="tat-alert-icon" aria-hidden="true">!</span><strong data-tat-alert-title class="tat-alert-accessible-title">@Model.Count TAT breaches</strong><span class="tat-alert-count" data-tat-count>@Model.Count</span><span class="tat-alert-action" aria-hidden="true">View <span>⌄</span></span></summary>
+    <div class="tat-alert-content"><div class="tat-alert-popover-heading"><strong data-tat-visible-title>@Model.Count TAT breach notifications</strong></div><div class="tat-alert-items" data-tat-alert-items>@foreach (var ticket in Model.Tickets) { <a href="@Url.Action("Details", "Tickets", new { id = ticket.Id })"><strong>#@ticket.Id.ToString("D4")</strong><span>@ticket.Title</span><small>Open ticket →</small></a> }</div>
     <p class="tat-alert-footer">Showing the earliest @Model.Tickets.Count overdue tickets · Updates every 30 seconds.</p></div>
 </details>
 <span class="tat-live-announcement" data-tat-announcement role="status" aria-live="polite" aria-atomic="true"></span>

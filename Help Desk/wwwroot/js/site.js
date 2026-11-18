@@ -1,3 +1,4 @@
+document.addEventListener("submit", event => { const form = event.target; if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-loading-form")) return; const button = form.querySelector("button[type=submit]"); if (!button || !form.checkValidity()) return; button.disabled = true; button.dataset.originalText = button.textContent; button.innerHTML = "<span class=\"submit-spinner\" aria-hidden=\"true\"></span> Sending…"; });
 (() => {
     const dialog = document.getElementById("delete-confirm-dialog");
     if (!dialog) return;
@@ -150,10 +151,12 @@
 
     // Keep ticket replies compact until content needs more room.
     document.querySelectorAll("textarea[data-auto-grow]").forEach(textarea => {
+        const minHeight = Number(textarea.dataset.minHeight) || 42;
+        const maxHeight = Number(textarea.dataset.maxHeight) || 220;
         const resize = () => {
-            textarea.style.height = "42px";
-            textarea.style.height = `${Math.min(textarea.scrollHeight, 220)}px`;
-            textarea.style.overflowY = textarea.scrollHeight > 220 ? "auto" : "hidden";
+            textarea.style.height = `${minHeight}px`;
+            textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+            textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
         };
         textarea.addEventListener("input", resize);
         resize();

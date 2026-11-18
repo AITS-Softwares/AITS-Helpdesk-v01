@@ -12,7 +12,8 @@
     <label asp-for="Name">Customer Name</label>
     <input asp-for="Name" maxlength="120" />
     <label asp-for="GstNumber">GST Number</label>
-    <input asp-for="GstNumber" maxlength="30" placeholder="Enter GST number" />
+    <input asp-for="GstNumber" maxlength="15" minlength="15" pattern="[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]" placeholder="27ABCDE1234F1Z5" autocapitalize="characters" />
+    <span asp-validation-for="GstNumber" class="validation"></span>
     <section class="customer-contact-entry" aria-labelledby="contactEmailHeading">
         <label id="contactEmailHeading">Contact Email / Domain</label>
         <div class="customer-contact-list" id="emailRuleList">

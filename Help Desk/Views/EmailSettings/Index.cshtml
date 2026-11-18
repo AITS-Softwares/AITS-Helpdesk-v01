@@ -3,7 +3,7 @@
     ViewData["Title"] = "Email Settings";
 }
 <style>
-    .mail-settings-page{max-width:1120px;margin:0 auto;display:grid;gap:22px;font-size:15px}
+    .mail-settings-page{max-width:84rem;margin:0 auto;display:grid;gap:22px;font-size:15px}
     .mail-settings-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:2px}
     .mail-settings-heading h1{margin:0;font-size:36px;line-height:1.15;letter-spacing:-.8px;color:var(--ink)}
     .mail-settings-heading p{margin:8px 0 0;color:var(--muted);font-size:16px}
@@ -36,7 +36,7 @@
 
 <main class="mail-settings-page">
     <header class="mail-settings-heading">
-        <div><p class="eyebrow">ADMINISTRATION</p><h1>Email Settings</h1><p>Configure ticket notifications and incoming support mail.</p></div>
+        <div><h1>Email Settings</h1><p>Configure ticket notifications and incoming support mail.</p></div>
         <span class="mail-settings-status @(Model.Enabled ? "is-on" : "is-off")">@(Model.Enabled ? "Sending enabled" : "Sending disabled")</span>
     </header>
 

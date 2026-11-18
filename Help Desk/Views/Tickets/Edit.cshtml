@@ -23,9 +23,9 @@
         <small id="accountCustomerNote" class="muted">@(internalUser ? "Customer is fixed for this ticket." : "Automatically linked to your account.")</small>
     }
     <label asp-for="Title"></label><input asp-for="Title" maxlength="160" placeholder="A short summary of the issue" />
-    <label asp-for="Description"></label><textarea asp-for="Description" rows="7" maxlength="5000" placeholder="What happened? Include any useful details."></textarea>
+    <label asp-for="Description"></label><textarea asp-for="Description" rows="3" maxlength="5000" data-auto-grow data-min-height="100" data-max-height="320" class="ticket-description-input" placeholder="What happened? Include any useful details."></textarea>
     <section class="ticket-photo-upload">
-        <label for="photo">Photo <span class="optional-label">Optional</span></label>
+        <label for="photo">Attachments <span class="optional-label">Optional</span></label>
         <input id="photo" name="photo" type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-describedby="photoHelp photoError" />
         <small id="photoHelp" class="muted">Add a screenshot or photo to explain the issue. PNG, JPG, or WebP, up to 5 MB. You can save without a photo.</small>
         <span id="photoError" class="validation" role="alert"></span>

@@ -195,6 +195,8 @@ public class ClientsController(HelpDeskDbContext db, DeskStore store) : Controll
         company.EmailDomains = string.Join("\n", emailRules);
         company.Phone = company.Phone?.Trim();
         company.GstNumber = string.IsNullOrWhiteSpace(company.GstNumber) ? null : company.GstNumber.Trim().ToUpperInvariant();
+        if (company.GstNumber is not null && !System.Text.RegularExpressions.Regex.IsMatch(company.GstNumber, @"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+            ModelState.AddModelError("GstNumber", "Enter a valid 15-character GSTIN (for example, 27ABCDE1234F1Z5).");
         if (await db.Companies.AnyAsync(c => c.Id != company.Id && c.Name == company.Name))
             ModelState.AddModelError("Name", "A customer with this name already exists.");
         if (!ModelState.IsValid) return View("Edit", company);

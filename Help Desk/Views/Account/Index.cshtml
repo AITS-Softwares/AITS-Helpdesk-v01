@@ -11,10 +11,12 @@
         .ToList();
     var filterName = (string?)ViewBag.FilterName ?? "";
     var filterEmail = (string?)ViewBag.FilterEmail ?? "";
+    var filterRole = (string?)ViewBag.FilterRole ?? "";
     var filterCustomerId = (int?)ViewBag.FilterCustomerId;
     rows = rows.Where(row =>
         (string.IsNullOrWhiteSpace(filterName) || row.Name.Contains(filterName, StringComparison.OrdinalIgnoreCase)) &&
         (string.IsNullOrWhiteSpace(filterEmail) || (row.User?.Email ?? row.Account?.Email ?? "").Contains(filterEmail, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(filterRole) || (filterRole == "admin" && row.Account?.Role == AccountRole.Admin) || (filterRole == "agent" && (row.User is AitsStaffUser || row.Account?.Role == AccountRole.AitsUser))) &&
         (!filterCustomerId.HasValue || row.User is not null && projects.TryGetValue(row.User.Id, out var assignedCustomers) && assignedCustomers.Any(customerName => companyByName.TryGetValue(customerName, out var customer) && customer.Id == filterCustomerId.Value)))
         .ToList();
     var clients = false;
@@ -542,7 +544,7 @@
     @if (User.IsInRole("Admin"))
     {
         var requests = (List<PasswordResetRequestItem>)ViewBag.PasswordResetRequests;
-        <section class="ad-panel">
+        <section class="ad-panel ad-reset-panel @(requests.Count == 0 ? "is-empty" : "")">
             <div class="ad-panel-head">
                 <h2>Password reset requests <span class="ad-count">@requests.Count</span></h2>
                 <p>Verify the user before resetting their password. No reset emails are sent.</p>
@@ -598,6 +600,11 @@
         <form method="get" class="ad-filters" aria-label="Search agent accounts">
             <input type="search" name="name" value="@filterName" placeholder="Filter by name" aria-label="Filter by name" />
             <input type="search" name="email" value="@filterEmail" placeholder="Filter by email" aria-label="Filter by email" />
+            <select name="role" aria-label="Filter by account type">
+                <option value="">All account types</option>
+                <option value="admin" selected="@(filterRole == "admin")">Administrators</option>
+                <option value="agent" selected="@(filterRole == "agent")">Agents</option>
+            </select>
             <select name="clientId" aria-label="Filter by customer">
                 <option value="">All customers</option>
                 @foreach (var customer in companies)
@@ -702,6 +709,13 @@
 
                                     @if (account is not null)
                                     {
+                                        @if (account.Role == AccountRole.Admin && account.Id != int.Parse(User.FindFirst("sub")!.Value))
+                                        {
+                                            <form asp-action="DeleteAdministrator" method="post" class="inline-delete-form" data-confirm-delete data-confirm-title="Delete administrator account?" data-confirm-message="Delete administrator account @row.Name? The last administrator account is protected.">
+                                                <input type="hidden" name="id" value="@account.Id" />
+                                                <button class="ad-link is-danger action-control ad-action-icon" type="submit" title="Delete administrator" aria-label="Delete administrator @row.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg><span>Delete Administrator</span></button>
+                                            </form>
+                                        }
                                         <a class="ad-link action-control ad-action-icon" asp-action="ResetPassword" asp-route-id="@account.Id" title="Reset Password" aria-label="Reset password for @row.Name"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg><span>Reset Password</span></a>
 
                                         @if (account.Role != AccountRole.Admin)

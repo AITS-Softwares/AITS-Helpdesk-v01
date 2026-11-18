@@ -27,6 +27,9 @@
             const result = await response.json();
             panel.hidden = result.count === 0;
             panel.querySelector('[data-tat-alert-title]').textContent = `${result.count} TAT breaches`;
+            panel.querySelector('[data-tat-count]').textContent = result.count;
+            panel.querySelector('[data-tat-visible-title]').textContent = `${result.count} TAT breach notifications`;
+            panel.querySelector('.tat-alert-summary').setAttribute('aria-label', `${result.count} TAT breach notifications`);
             const container = panel.querySelector('[data-tat-alert-items]');
             const fragment = document.createDocumentFragment();
             for (const ticket of result.tickets) {

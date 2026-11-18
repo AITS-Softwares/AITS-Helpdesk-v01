@@ -147,7 +147,7 @@ public class AccountController(HelpDeskDbContext db, IPasswordHasher<DeskAccount
     }
 
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Index(bool clients = false, int? clientId = null, string? name = null, string? email = null)
+    public async Task<IActionResult> Index(bool clients = false, int? clientId = null, string? name = null, string? email = null, string? role = null)
     {
         if (clients) return RedirectToAction(nameof(Index));
         ViewBag.ClientAccounts = false;
@@ -156,6 +156,7 @@ public class AccountController(HelpDeskDbContext db, IPasswordHasher<DeskAccount
         ViewBag.FilterCustomerId = clientId;
         ViewBag.FilterName = name?.Trim() ?? "";
         ViewBag.FilterEmail = email?.Trim() ?? "";
+        ViewBag.FilterRole = role?.Trim().ToLowerInvariant() ?? "";
         ViewBag.DirectoryUsers = await db.Users.AsNoTracking().Include(u => u.Client)
             .Where(u => u.UserType == UserType.AitsStaff)
             .OrderBy(u => u.Name).ToListAsync();
@@ -241,6 +242,27 @@ public class AccountController(HelpDeskDbContext db, IPasswordHasher<DeskAccount
             TempData["Message"] = isActive.Value ? "Account activated. The user can sign in if approved." : "Account deactivated. Sign-in and existing sessions are blocked.";
         } catch (DbUpdateException) { TempData["Error"] = "Account status could not be saved. Refresh and try again."; }
         return RedirectToAction(nameof(Index), new { clients = account is ClientAccount });
+    }
+    [Authorize(Roles = "Admin"), HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteAdministrator(int id)
+    {
+        var account = await db.InternalAccounts.SingleOrDefaultAsync(a => a.Id == id && a.Role == AccountRole.Admin);
+        if (account is null) return NotFound();
+        var currentId = int.Parse(User.FindFirstValue("sub")!);
+        if (account.Id == currentId) {
+            TempData["Error"] = "You cannot delete the administrator account you are currently using.";
+            return RedirectToAction(nameof(Index));
+        }
+        if (await db.InternalAccounts.CountAsync(a => a.Role == AccountRole.Admin) <= 1) {
+            TempData["Error"] = "The last administrator account cannot be deleted. Create another administrator first.";
+            return RedirectToAction(nameof(Index));
+        }
+        foreach (var request in await db.PasswordResetRequests.Where(r => r.CompletedByAccountId == id).ToListAsync())
+            request.CompletedByAccountId = null;
+        db.InternalAccounts.Remove(account);
+        try { await db.SaveChangesAsync(); TempData["Message"] = "Administrator account deleted."; }
+        catch (DbUpdateException) { TempData["Error"] = "Administrator account could not be deleted because it is still in use."; }
+        return RedirectToAction(nameof(Index));
     }
     private async Task<List<DeskUser>> AvailableUsers() => await db.Users.AsNoTracking().Where(u => u.UserType == UserType.AitsStaff && !db.Accounts.Any(a => a.DeskUserId == u.Id)).OrderBy(u => u.Name).ToListAsync();
     [Authorize(Roles = "Admin"), HttpGet]

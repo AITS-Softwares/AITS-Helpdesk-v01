@@ -665,6 +665,8 @@
             gap: 0.25rem;
         }
 
+        .tk-grid.is-list .tk-card-top .tk-badge { display: none; }
+
         .tk-grid.is-list .tk-card-foot {
             display: contents;
         }
@@ -914,8 +916,8 @@
         <div class="tk-results-head">
             <h2>@Model.Tickets.Count @(Model.Tickets.Count == 1 ? "ticket" : "tickets")</h2>
             <div class="tk-view" role="group" aria-label="Change layout">
-                <button type="button" class="tk-view-cards" data-view="cards" aria-pressed="true">Cards</button>
-                <button type="button" class="tk-view-list" data-view="list" aria-pressed="false">List</button>
+                <button type="button" class="tk-view-cards" data-view="cards" aria-pressed="false">Cards</button>
+                <button type="button" class="tk-view-list" data-view="list" aria-pressed="true">List</button>
             </div>
         </div>
 
@@ -926,9 +928,9 @@
                 <span>Subject</span>
                 <span>Customer</span>
                 <span>Priority / Level</span>
-                @if (User.IsInRole("Admin")) { <span>Assign Tickets</span> }
+                @if (User.IsInRole("Admin")) { <span>Assign Agent</span> }
                 <span>Working Agent</span>
-                <span>Updated</span>
+                <span>Status</span>
             </div>
 
             <div class="tk-grid" id="ticketGrid">
@@ -987,7 +989,7 @@
                             </div>
                             }
                             <span class="tk-working-agent">@(ticket.Status == TicketStatus.InProgress && ticket.WorkStartedAt.HasValue ? agentName ?? "NA" : "NA")</span>
-                            <span class="tk-date">@Help_Desk.Services.TicketTiming.ToIndiaTime(ticket.UpdatedAt).ToString("dd MMM, hh:mm tt")</span>
+                            <span class="tk-date tk-list-status"><span class="tk-badge tk-s-@ticket.Status">@ticket.Status</span></span>
                         </div>
                     </article>
                 }
@@ -1033,8 +1035,8 @@
 
           var saved = null;
           try { saved = localStorage.getItem('ticketView'); } catch (e) { }
-          if (saved === 'list') { setView('list'); }
-          else if (listHead) { listHead.style.display = 'none'; }
+          if (saved === 'cards') { setView('cards'); }
+          else { setView('list'); }
         })();
     </script>
 }

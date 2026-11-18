@@ -29,7 +29,7 @@
         }
     </nav>
     <div class="sidebar-note"><span class="sidebar-note-icon">✦</span><strong>Support, in sync.</strong><p>The right agents. The right customers. A clearer way to work.</p></div>
-    <div class="sidebar-footer"><div class="workspace"><span class="avatar">@initials</span><span class="workspace-person">@displayName<small>@roleLabel</small></span></div><form asp-controller="Account" asp-action="Logout" method="post" class="signout-form"><button type="submit">Sign out <span aria-hidden="true">↗</span></button></form></div>
+    <div class="sidebar-footer"><div class="workspace"><span class="avatar">@initials</span><span class="workspace-person">@displayName<small>@roleLabel</small></span></div><form asp-controller="Account" asp-action="Logout" method="post" class="signout-form"><button type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg><span>Sign out</span></button></form></div>
 </aside>
 <div class="shell">
     <header class="topbar"><div class="breadcrumb"><span class="breadcrumb-icon">▦</span><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>@ViewData["Title"]</strong></div><div class="topbar-actions">@if (User.IsInRole("Admin") || User.IsInRole("AitsUser")) { @await Component.InvokeAsync("TatAlerts") }<span class="workspace-badge"><span class="status-dot"></span>@roleLabel</span></div></header>

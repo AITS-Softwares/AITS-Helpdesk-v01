@@ -177,3 +177,27 @@ h1,h2,h3,.tat-alert-summary strong,.sidebar nav a,.sidebar .nav-label,.breadcrum
 .company-hero-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}.company-hero-actions .button{white-space:nowrap}@media(max-width:700px){.company-hero-actions{width:100%;justify-content:flex-end}}
 
 .customer-contact-entry{display:grid;gap:7px;margin:4px 0 12px}.customer-contact-entry>label{margin:0;color:var(--ink);font-size:13px;font-weight:650}.customer-contact-list{display:grid;gap:8px}.customer-contact-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;align-items:center;gap:8px}.customer-contact-row input{box-sizing:border-box;width:100%;min-width:0;min-height:42px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface,#fff);color:var(--ink);font:inherit;font-size:14px}.customer-contact-add,.customer-contact-remove{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:9px;background:var(--surface,#fff);color:var(--primary);font:inherit;font-size:24px;line-height:1;cursor:pointer}.customer-contact-add:hover,.customer-contact-remove:hover{border-color:var(--primary);background:#f8f7ff}.customer-contact-remove{color:#bc3347;font-size:22px}.customer-contact-entry>small{color:var(--muted);font-size:11px}
+
+.submit-spinner{display:inline-block;width:14px;height:14px;margin-right:7px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;vertical-align:-2px;animation:submit-spin .7s linear infinite}@keyframes submit-spin{to{transform:rotate(360deg)}}.ticket-content-grid{gap:8px}.ticket-list-status{white-space:nowrap}
+
+
+.mail-connection-success{color:#16734d;font-weight:700}.mail-connection-success:before{content:'✓ ';}.mail-connection-failure{color:#b3261e;font-weight:700}.ticket-content-grid{align-items:start}.ticket-content-grid>section:first-child{display:grid;align-content:start;gap:8px}.ticket-content-grid>section:first-child h2{margin-bottom:0!important}.ticket-content-grid .ticket-conversation form{margin-top:12px}
+
+
+@media (hover:hover) and (min-width:721px){.company-hero-actions .action-control{gap:7px!important;min-width:0!important;padding-inline:14px!important}.company-hero-actions .action-control>span{max-width:none!important;overflow:visible!important;opacity:1!important;margin-left:0!important}.company-hero-actions .action-control svg{width:15px;height:15px;flex:0 0 15px}.company-hero-actions .button.danger{background:#d92d20;color:#fff;border-color:#d92d20}.company-hero-actions .button.danger:hover{background:#b42318;border-color:#b42318}}
+
+
+.ad-reset-panel.is-empty{padding:16px 20px;margin-bottom:1rem}.ad-reset-panel.is-empty .ad-panel-head h2{font-size:1.05rem}.ad-reset-panel.is-empty .ad-panel-head p{margin-bottom:.65rem;font-size:.82rem}.ad-reset-panel.is-empty .ad-empty{padding:.7rem .8rem;font-size:.85rem}.signout-form button{justify-content:flex-start;gap:9px}.signout-form button svg{width:15px;height:15px;flex:0 0 15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.signout-form button span{margin-left:0}
+
+
+.ticket-content-main{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:16px;min-width:0}.ticket-content-main>.detail-panel{min-width:0}.ticket-content-main .ticket-conversation{border:1px solid var(--line);border-radius:14px}.ticket-content-grid{gap:16px}
+
+
+.ticket-details-page .ticket-email-notifications{padding:12px 15px}.ticket-details-page .ticket-email-notifications h2{margin-bottom:8px;font-size:14px}.ticket-details-page .ticket-email-notifications table{font-size:11px}.ticket-details-page .ticket-email-notifications th,.ticket-details-page .ticket-email-notifications td{padding:7px 10px}.ticket-details-page .ticket-email-notifications .badge{padding:2px 7px;font-size:10px}.ticket-details-page .ticket-email-notifications small{font-size:10px}
+
+
+.ticket-description-input{box-sizing:border-box;min-height:100px;max-height:320px;resize:none;overflow-y:hidden;line-height:1.55;padding:11px 13px;transition:height .12s ease}
+
+
+.admin-create-form{max-width:680px;margin:0 auto 24px;padding:24px 28px;display:grid;gap:0}.admin-create-form label{margin:14px 0 6px}.admin-create-form input{box-sizing:border-box;background:#fff}.admin-create-form .form-actions{margin-top:20px;padding-top:16px}.admin-create-form .validation:not(:empty){margin-top:4px}@media(max-width:720px){.admin-create-form{padding:16px 18px}}
+
